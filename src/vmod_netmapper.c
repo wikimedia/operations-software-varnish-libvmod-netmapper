@@ -12,8 +12,13 @@
 
 #include "vnm.h"
 
+// How often we check for fresh data
+// XXX more like ~15-60s for the real thing, this is for testing
+// XXX can it be configurable?
+static const unsigned RELOAD_CHECK_INTERVAL = 1;
+
 // global singleton, swapped out on update by...
-static vnm_db_t* db;
+static vnm_db_t* db = NULL;
 
 // this singleton updater thread
 static pthread_t updater;
@@ -26,8 +31,7 @@ static const char* vnm_str_to_vcl(struct sess* sp, const vnm_str_t* str) {
     unsigned used = 0;
     const unsigned space = WS_Reserve(sp->ws, 0);
     if(space < str->len) {
-        // XXX not SLT_LostHeader, what?
-        WSP(sp, SLT_LostHeader, "vmod_netmapper: no space for string retval!");
+        WSP(sp, SLT_Error, "vmod_netmapper: no space for string retval!");
     }
     else {
         used = str->len;
@@ -40,9 +44,11 @@ static const char* vnm_str_to_vcl(struct sess* sp, const vnm_str_t* str) {
 
 static void* updater_start(void* x) {
     while(1) {
-        sleep(1); // XXX more like ~15-60s for the real thing, this
-                 //   is to help show bugs :)
+        sleep(RELOAD_CHECK_INTERVAL);
         if(1) { // XXX stat-check indicates reload necc...
+        // XXX we want to quiesce on noticing the
+        //  change as well, perhaps by looping again
+        //  w/ state.
             vnm_db_t* new_db = vnm_db_parse();
             if(new_db) {
                 vnm_db_t* old_db = db;
@@ -68,6 +74,11 @@ static void global_fini(void) {
 static void global_init(void) {
     // initial database load
     db = vnm_db_parse();
+    if(!db) {
+        // XXX what do we do on initial failure? die?
+        perror("libvmod_netmapper: Cannot load initial JSON data");
+        abort();
+    }
     // start the updater thread
     pthread_create(&updater, NULL, updater_start, NULL);
 }
@@ -102,9 +113,8 @@ static void destruct_rcu(void* x) { pthread_setspecific(unreg_hack, NULL); rcu_u
 static void make_unreg_hack(void) { pthread_key_create(&unreg_hack, destruct_rcu); }
 
 const char* vmod_map(struct sess *sp, const char* ip_string) {
-    assert(db); assert(sp); assert(ip_string);
-
-    CHECK_OBJ_NOTNULL(sp, SESS_MAGIC); // XXX ???
+    assert(db); assert(ip_string);
+    CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
 
     // The rest of the rcu register/unregister hack
     static __thread bool rcu_registered = false;
