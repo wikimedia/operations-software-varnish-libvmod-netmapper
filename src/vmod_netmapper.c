@@ -47,7 +47,7 @@ static const char* str_to_vcl(struct sess* sp, const str_t* str) {
     else {
         used = str->len;
         rv = sp->ws->f;
-	    memcpy(sp->ws->f, str->data, used);
+        memcpy(sp->ws->f, str->data, used);
     }
     WS_Release(sp->ws, used);
     return rv;
@@ -140,8 +140,8 @@ static const char* ndb_map(struct sess* sp, const char* ip_string) {
     static __thread bool rcu_registered = false;
     if(!rcu_registered) {
         pthread_once(&unreg_hack_once, make_unreg_hack);
-	pthread_setspecific(unreg_hack, (void*)1);
-	rcu_register_thread();
+        pthread_setspecific(unreg_hack, (void*)1);
+        rcu_register_thread();
         rcu_registered = true;
     }
 
