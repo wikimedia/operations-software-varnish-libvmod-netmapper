@@ -1,0 +1,3 @@
+Module netmapper
+Init init_function
+Function STRING map(STRING)
