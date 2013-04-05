@@ -8,7 +8,9 @@ libvmod_netmapper_la_LIBS = -lurcu-qsbr -ljansson
 libvmod_netmapper_la_SOURCES = \
 	vcc_if.c \
 	vcc_if.h \
-	vmod_netmapper.c
+	vmod_netmapper.c \
+	vnm.c \
+	vnm.h
 
 vcc_if.c vcc_if.h: $(VARNISHSRC)/lib/libvmod_std/vmod.py $(top_srcdir)/src/vmod_netmapper.vcc
 	@PYTHON@ $(VARNISHSRC)/lib/libvmod_std/vmod.py $(top_srcdir)/src/vmod_netmapper.vcc
