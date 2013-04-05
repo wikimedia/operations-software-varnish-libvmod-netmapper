@@ -2,21 +2,22 @@ varnishtest "Test netmapper vmod"
 
 server s1 {
        rxreq
+       expect req.http.X-CS == "001-01"
        txresp
 } -start
 
 varnish v1 -vcl+backend {
-	import netmapper from "${vmod_topbuild}/src/.libs/libvmod_netmapper.so";
+    import netmapper from "${vmod_topbuild}/src/.libs/libvmod_netmapper.so";
 
-	sub vcl_deliver {
-		set resp.http.hello = netmapper.hello("World");
-	}
+    sub vcl_recv {
+        set req.http.X-CS = netmapper.map("" + client.ip);
+        return (pass);
+    }
 } -start
 
 client c1 {
-	txreq -url "/"
-	rxresp
-	expect resp.http.hello == "Hello, World"
+    txreq -url "/"
+    rxresp
 }
 
 client c1 -run
