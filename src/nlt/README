@@ -1,0 +1,25 @@
+
+In the interests of getting things done faster with mostly
+  known-good code, this stuff is just a copy of the nlist/ntree
+  code from gdnsd's plugin_geoip.  It would probably be more
+  optimal to use a compressed tree for this vmod_netmapper
+  code, but this uncompressed tree is pretty damned efficient,
+  and it's really hard to implement a bug-free, efficient
+  compressed tree for these network lookups in a short period
+  of time, so I dropped that for now.
+
+Minor modifications include stuff like:
+  Removing debug and compiler-hint stuff that relied
+    on gdnsd's infrastructure.
+  Replacing the outer lookup function with one that
+    doesn't use gdnsd-specific datastructures, and doesn't
+    care about returning scope masks, etc.
+  Adding headers as necessary.
+  Removed list-merge stuff, pre-normalization stuff, map_name,
+    etc that this code doesn't need.
+  Removed internal error logging, replaced with retvals to
+    indicate failures/warnings.
+
+The functional algorithms and structures are unchanged.
+
+-- Brandon
