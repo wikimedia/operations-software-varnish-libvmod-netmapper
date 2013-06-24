@@ -5,6 +5,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdio.h>
 
 #include <pthread.h>
 #define _LGPL_SOURCE 1
@@ -17,6 +21,7 @@ typedef struct {
     char* fn;
     vnm_db_t* db;
     pthread_t updater;
+    struct stat db_stat;
 } vnm_priv_t;
 
 // Copy a str_t*'s data to a const char* in the session workspace,
@@ -42,19 +47,30 @@ static const char* vnm_str_to_vcl(struct sess* sp, const vnm_str_t* str) {
 
 static void* updater_start(void* vp_asvoid) {
     vnm_priv_t* vp = vp_asvoid;
+    struct stat check_stat;
 
     while(1) {
         sleep(vp->reload_check_interval);
-        if(1) { // XXX stat-check indicates reload necc...
-        // XXX we want to quiesce on noticing the
-        //  change as well, perhaps by looping again
-        //  w/ state.
-            vnm_db_t* new_db = vnm_db_parse(vp->fn);
+        if(stat(vp->fn, &check_stat)) {
+            VSL(SLT_Error, 0, "vmod_netmapper: Failed to stat JSON database '%s' for reload check", vp->fn);
+            continue;
+        }
+       
+        if(    check_stat.st_mtime != vp->db_stat.st_mtime
+            || check_stat.st_ctime != vp->db_stat.st_ctime
+            || check_stat.st_ino   != vp->db_stat.st_ino
+            || check_stat.st_dev   != vp->db_stat.st_dev) {
+
+            vnm_db_t* new_db = vnm_db_parse(vp->fn, &vp->db_stat);
             if(new_db) {
                 vnm_db_t* old_db = vp->db;
                 rcu_assign_pointer(vp->db, new_db);
                 synchronize_rcu();
                 vnm_db_destruct(old_db);
+                VSL(SLT_CLI, 0, "vmod_netmapper: JSON database '%s' reloaded with new data", vp->fn); // CLI??
+            }
+            else {
+                VSL(SLT_Error, 0, "vmod_netmapper: JSON database '%s' reload failed, continuing with old data", vp->fn);
             }
         }
     }
@@ -84,17 +100,17 @@ void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* json_path, c
         //   this is a situation that has to be handled manually
         //   during some reload by destructing ourselves, or that
         //   multiple threads can run vcl_init() for one VCL?
-        perror("Double-init! Bug?");
+        WSP(sp, SLT_Error, "vmod_netmapper: per-VCL double-init! Bug?");
         abort();
     }
 
     vnm_priv_t* vp = malloc(sizeof(vnm_priv_t));
     vp->reload_check_interval = reload_interval;
     vp->fn = strdup(json_path);
-    vp->db = vnm_db_parse(vp->fn);
+    vp->db = vnm_db_parse(vp->fn, &vp->db_stat);
     if(!vp->db) {
-        perror("Something failed with initial JSON load...");
-        abort(); // ??? XXX
+        VSL(SLT_Error, 0, "vmod_netmapper: Failed initial load of JSON netmapper database %s", vp->fn);
+        abort();
     }
     pthread_create(&vp->updater, NULL, updater_start, vp);
     priv->priv = vp;

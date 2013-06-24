@@ -1,3 +1,4 @@
+#include "bin/varnishd/cache.h"
 #include "vnm.h"
 
 #include <assert.h>
@@ -9,7 +10,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include <jansson.h>
 
@@ -17,8 +21,7 @@
 #include "ntree.h"
 #include "nlist.h"
 
-// XXX hack for now, not sure what to do with this stuff here, yet...
-#define ERR(fmt,...) fprintf(stderr, fmt, ##__VA_ARGS__)
+#define ERR(fmt,...) VSL(SLT_Error, 0, "vmod_netmapper: " fmt, ##__VA_ARGS__)
 
 struct _vnm_db_struct {
     ntree_t* tree;
@@ -54,7 +57,7 @@ static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask) {
     );
 }
 
-static bool append_string_to_nlist(nlist_t* nl, const char* addr_mask, const unsigned stridx) {
+static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl, const char* addr_mask, const unsigned stridx) {
 
     // convert "192.0.2.0/24\0" -> "192.0.2.0\0" + "24\0" in stack
     const unsigned inlen = strlen(addr_mask);
@@ -62,7 +65,7 @@ static bool append_string_to_nlist(nlist_t* nl, const char* addr_mask, const uns
     memcpy(net_str, addr_mask, inlen + 1);
     char* mask_str = strchr(net_str, '/');
     if(!mask_str) {
-        ERR("'%s' does not parse as addr/mask", net_str);
+        ERR("JSON database '%s', key '%s': '%s' does not parse as addr/mask", fn, key, net_str);
         return true;
     }
     *mask_str++ = '\0';
@@ -81,7 +84,7 @@ static bool append_string_to_nlist(nlist_t* nl, const char* addr_mask, const uns
     };
     const int addr_err = getaddrinfo(net_str, mask_str, &hints, &ainfo);
     if(addr_err) {
-        ERR("'%s' does not parse as addr/mask: %s", net_str, gai_strerror(addr_err));
+        ERR("JSON database '%s', key '%s': '%s' does not parse as addr/mask: %s", fn, key, net_str, gai_strerror(addr_err));
         return true;
     }
 
@@ -95,7 +98,7 @@ static bool append_string_to_nlist(nlist_t* nl, const char* addr_mask, const uns
         mask = ntohs(sin6->sin6_port);
         memcpy(ipv6, sin6->sin6_addr.s6_addr, 16);
         if(check_v4_issues(ipv6, mask)) {
-            ERR("'%s' covers illegal IPv4-like space", addr_mask);
+            ERR("JSON database '%s', key '%s': '%s' covers illegal IPv4-like space", fn, key, addr_mask);
             freeaddrinfo(ainfo);
             return true;
         }
@@ -109,7 +112,7 @@ static bool append_string_to_nlist(nlist_t* nl, const char* addr_mask, const uns
     }
 
     if(mask > 128) {
-        ERR("'%s' has illegal netmask", addr_mask);
+        ERR("JSON database '%s', key '%s': '%s' has illegal netmask", fn, key, addr_mask);
         freeaddrinfo(ainfo);
         return true;
     }
@@ -118,22 +121,47 @@ static bool append_string_to_nlist(nlist_t* nl, const char* addr_mask, const uns
 
     // actually stick data in the nlist using existing call
     if(nlist_append(nl, ipv6, mask, stridx))
-        ERR("Network addr/mask '%s' has bits beyond the network mask, which were auto-cleared!", addr_mask);
+        ERR("JSON database '%s', key '%s': '%s' has bits beyond the network mask, which were auto-cleared!", fn, key, addr_mask);
 
     return false;
 }
 
-vnm_db_t* vnm_db_parse(const char* fn) {
+vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
+    assert(fn); assert(db_stat);
+
+    struct stat db_stat_precheck;
+    if(stat(fn, &db_stat_precheck)) {
+        ERR("Failed to stat() JSON database %s: %u", fn, errno);
+        return NULL;
+    }
+
     json_error_t errobj;
     json_t* toplevel = json_load_file(fn, 0, &errobj);
 
     if(!toplevel) {
-        ERR("Failed to load JSON input: %s", errobj.text);
+        ERR("Failed to load JSON database %s: %s", fn, errobj.text);
         return NULL;
     }
 
     if(!json_is_object(toplevel)) {
-        ERR("JSON input is not an object!");
+        ERR("JSON database %s top-level is not an object!", fn);
+        json_decref(toplevel);
+        return NULL;
+    }
+
+    struct stat db_stat_postcheck;
+    if(stat(fn, &db_stat_postcheck)) {
+        ERR("Failed to stat() JSON database %s: %u", fn, errno);
+        json_decref(toplevel);
+        return NULL;
+    }
+
+    if(    db_stat_postcheck.st_mtime != db_stat_precheck.st_mtime
+        || db_stat_postcheck.st_ctime != db_stat_precheck.st_ctime
+        || db_stat_postcheck.st_ino   != db_stat_precheck.st_ino
+        || db_stat_postcheck.st_dev   != db_stat_precheck.st_dev) {
+        ERR("JSON database %s changed while reading!", fn);
+        json_decref(toplevel);
         return NULL;
     }
 
@@ -150,7 +178,7 @@ vnm_db_t* vnm_db_parse(const char* fn) {
         key = json_object_iter_key(iter);
         val = json_object_iter_value(iter);
         if(!json_is_array(val)) {
-            ERR("JSON value for key '%s' should be an array!", key);
+            ERR("JSON database %s: value for key '%s' should be an array!", fn, key);
             nlist_destroy(templist);
             vnm_strdb_destroy(d->strdb);
             free(d);
@@ -164,8 +192,8 @@ vnm_db_t* vnm_db_parse(const char* fn) {
             const json_t* net = json_array_get(val, i);
             const bool net_isstr = json_is_string(net);
             if(!net_isstr)
-                ERR("JSON array member %u for key '%s' should be an address string!", i, key);
-            if(!net_isstr || append_string_to_nlist(templist, json_string_value(net), stridx)) {
+                ERR("JSON database %s: array member %u for key '%s' should be an address string!", fn, i, key);
+            if(!net_isstr || append_string_to_nlist(fn, key, templist, json_string_value(net), stridx)) {
                 nlist_destroy(templist);
                 vnm_strdb_destroy(d->strdb);
                 free(d);
@@ -196,6 +224,9 @@ vnm_db_t* vnm_db_parse(const char* fn) {
     // free up temporary stuff
     nlist_destroy(templist);
     json_decref(toplevel);
+
+    // copy out stat data for future checks
+    memcpy(db_stat, &db_stat_postcheck, sizeof(struct stat));
 
     return d;
 }
