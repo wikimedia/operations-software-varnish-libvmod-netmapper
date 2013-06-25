@@ -132,8 +132,7 @@ static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip) {
 }
 
 // if "addr" is in any v4-compatible spaces other than
-//   v4compat (our canonical one), convert to v4compat,
-//   and return a mask_adj to v4_compat.
+//   v4compat (our canonical one), convert to v4compat.
 // returns address zero if no conversion
 static uint32_t v6_v4fixup(const uint8_t* in) {
     assert(in);

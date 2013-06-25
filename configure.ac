@@ -1,6 +1,6 @@
 AC_PREREQ(2.59)
-AC_COPYRIGHT([Copyright (c) 2011 Varnish Software AS])
-AC_INIT([libvmod-netmapper], [trunk])
+AC_COPYRIGHT([Copyright (c) 2013 Brandon Black <bblack@wikimedia.org>])
+AC_INIT([libvmod-netmapper],[1.0],[bblack@wikimedia.org],[libvmod-netmapper],[https://git.wikimedia.org/summary/operations%2Fsoftware%2Fvarnish%2Flibvmod-netmapper])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([acaux])
 AC_CONFIG_SRCDIR(src/vmod_netmapper.vcc)
