@@ -30,6 +30,6 @@ tests/*.vtc: libvmod_netmapper.la
 
 check: $(VMOD_TESTS)
 
-EXTRA_DIST = vmod_netmapper.vcc $(VMOD_TESTS) $(VMOD_TDATA)
+EXTRA_DIST = nlt/README vmod_netmapper.vcc $(VMOD_TESTS) $(VMOD_TDATA)
 
 CLEANFILES = $(builddir)/vcc_if.c $(builddir)/vcc_if.h
