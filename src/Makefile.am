@@ -1,6 +1,6 @@
-INCLUDES = -I$(VARNISHSRC)/include -I$(VARNISHSRC) -I$(srcdir)/nlt
+AM_CPPFLAGS = -I$(VARNISHSRC)/include -I$(VARNISHSRC) -I$(srcdir)/nlt
 
-vmoddir = $(VMODDIR)
+vmoddir = $(libdir)/varnish/vmods
 vmod_LTLIBRARIES = libvmod_netmapper.la
 
 libvmod_netmapper_la_LDFLAGS = -module -export-dynamic -avoid-version -shared
@@ -21,16 +21,15 @@ libvmod_netmapper_la_SOURCES = \
 vcc_if.c vcc_if.h: $(VARNISHSRC)/lib/libvmod_std/vmod.py $(top_srcdir)/src/vmod_netmapper.vcc
 	@PYTHON@ $(VARNISHSRC)/lib/libvmod_std/vmod.py $(top_srcdir)/src/vmod_netmapper.vcc
 
+VMOD_TDATA = tests/*.json
 VMOD_TESTS = tests/*.vtc
-.PHONY: $(VMOD_TESTS)
+.PHONY: $(VMOD_TESTS) $(VMOD_TDATA)
 
-tests/*.vtc:
-	$(VARNISHSRC)/bin/varnishtest/varnishtest -Dvarnishd=$(VARNISHSRC)/bin/varnishd/varnishd -Dvmod_topbuild=$(abs_top_builddir) -Dvmod_topsrc=$(abs_top_srcdir) $@
+tests/*.vtc: libvmod_netmapper.la
+	$(VARNISHTEST) -Dvarnishd=$(VARNISHD) -Dvmod_topbuild=$(abs_top_builddir) -Dvmod_topsrc=$(abs_top_srcdir) $(srcdir)/$@
 
 check: $(VMOD_TESTS)
 
-EXTRA_DIST = \
-	vmod_netmapper.vcc \
-	$(VMOD_TESTS)
+EXTRA_DIST = vmod_netmapper.vcc $(VMOD_TESTS) $(VMOD_TDATA)
 
 CLEANFILES = $(builddir)/vcc_if.c $(builddir)/vcc_if.h

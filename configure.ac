@@ -9,7 +9,7 @@ AM_CONFIG_HEADER(config.h)
 AC_CANONICAL_SYSTEM
 AC_LANG(C)
 
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([dist-xz no-dist-gzip foreign tar-ustar -Wall])
 
 AC_GNU_SOURCE
 AC_PROG_CC
@@ -51,20 +51,25 @@ AC_CHECK_FILE([$VARNISHSRC/include/varnishapi.h],
 	[AC_MSG_FAILURE(["$VARNISHSRC" is not a Varnish source directory])]
 )
 
-# Check that varnishtest is built in the varnish source directory
-AC_CHECK_FILE([$VARNISHSRC/bin/varnishtest/varnishtest],
+# varnishd and varnishtest locations (default from source tree)
+
+AC_ARG_VAR([VARNISHD], [path to varnishd binary (default: used built copy in VARNISHSRC)])
+if test "x$VARNISHD" = x; then
+    VARNISHD="$VARNISHSRC/bin/varnishd/varnishd"
+fi
+AC_CHECK_FILE([$VARNISHD],
 	[],
-	[AC_MSG_FAILURE([Can't find "$VARNISHSRC/bin/varnishtest/varnishtest". Please build your varnish source directory])]
+    [AC_MSG_FAILURE([varnishd binary "$VARNISHD" does not exist])]
 )
 
-# vmod installation dir
-AC_ARG_VAR([VMODDIR], [vmod installation directory @<:@LIBDIR/varnish/vmods@:>@])
-if test "x$VMODDIR" = x; then
-	VMODDIR=`pkg-config --variable=vmoddir varnishapi`
-	if test "x$VMODDIR" = x; then
-		AC_MSG_FAILURE([Can't determine vmod installation directory])
-	fi
+AC_ARG_VAR([VARNISHTEST], [path to varnishtest binary (default: used built copy in VARNISHSRC)])
+if test "x$VARNISHTEST" = x; then
+    VARNISHTEST="$VARNISHSRC/bin/varnishtest/varnishtest"
 fi
+AC_CHECK_FILE([$VARNISHTEST],
+	[],
+    [AC_MSG_FAILURE([varnishtest binary "$VARNISHTEST" does not exist])]
+)
 
 # userspace-rcu for lockless netmap reload
 AC_CHECK_HEADER(urcu-qsbr.h,[
