@@ -5,13 +5,18 @@ server s1 {
        expect req.http.X-CS == "localhosty"
        expect req.http.X-CS-T1 == "localhosty"
        expect req.http.X-CS-T2 == "localhosty"
-       expect req.http.X-CS-T3 == "Carrier Foo"
-       expect req.http.X-CS-T4 == "Carrier Bar"
-       expect req.http.X-CS-T5 == "Carrier Foo"
-       expect req.http.X-CS-T6 == "Carrier Foo"
-       expect req.http.X-CS-T7 == "Carrier Bar"
-       expect req.http.X-CS-T8 == <undef>
-       expect req.http.X-CS-T9 == "Carrier Bar"
+       expect req.http.X-CS-T3 == "ZZZ"
+       expect req.http.X-CS-T4 == "Carrier Foo"
+       expect req.http.X-CS-T5 == "Carrier Bar"
+       expect req.http.X-CS-T6 == "XYZZY"
+       expect req.http.X-CS-T7 == <undef>
+       expect req.http.X-CS-T8 == "Carrier Foo"
+       expect req.http.X-CS-T9 == <undef>
+       expect req.http.X-CS-TA == "Carrier Foo"
+       expect req.http.X-CS-TB == "Carrier Bar"
+       expect req.http.X-CS-TC == <undef>
+       expect req.http.X-CS-TD == <undef>
+       expect req.http.X-CS-TE == "Carrier Bar"
        txresp
 } -start
 
@@ -19,20 +24,27 @@ varnish v1 -vcl+backend {
     import netmapper from "${vmod_topbuild}/src/.libs/libvmod_netmapper.so";
 
     sub vcl_init {
-        netmapper.init("${vmod_topsrc}/src/tests/test01.json", 1);
+        netmapper.init("aaa", "${vmod_topsrc}/src/tests/test01a.json", 1);
+        netmapper.init("bbb", "${vmod_topsrc}/src/tests/test01b.json", 1);
+        netmapper.init("ccc", "${vmod_topsrc}/src/tests/test01c.json", 1);
     }
 
     sub vcl_recv {
-        set req.http.X-CS = netmapper.map("" + client.ip);
-        set req.http.X-CS-T1 = netmapper.map("127.1.2.3");
-        set req.http.X-CS-T2 = netmapper.map("::1");
-        set req.http.X-CS-T3 = netmapper.map("192.0.2.75");
-        set req.http.X-CS-T4 = netmapper.map("192.0.2.175");
-        set req.http.X-CS-T5 = netmapper.map("2001:db8:1234::abcd");
-        set req.http.X-CS-T6 = netmapper.map("10.200.100.10");
-        set req.http.X-CS-T7 = netmapper.map("172.16.123.123");
-        set req.http.X-CS-T8 = netmapper.map("2001:db8:4230::abcd");
-        set req.http.X-CS-T9 = netmapper.map("2001:db8:4231::abcd");
+        set req.http.X-CS = netmapper.map("aaa", "" + client.ip);
+        set req.http.X-CS-T1 = netmapper.map("aaa", "127.1.2.3");
+        set req.http.X-CS-T2 = netmapper.map("aaa", "::1");
+        set req.http.X-CS-T3 = netmapper.map("ccc", "123.123.123.123");
+        set req.http.X-CS-T4 = netmapper.map("aaa", "192.0.2.75");
+        set req.http.X-CS-T5 = netmapper.map("aaa", "192.0.2.175");
+        set req.http.X-CS-T6 = netmapper.map("bbb", "192.255.1.42");
+        set req.http.X-CS-T7 = netmapper.map("nxnxnx", "1.2.3.4");
+        set req.http.X-CS-T8 = netmapper.map("aaa", "2001:db8:1234::abcd");
+        set req.http.X-CS-T9 = netmapper.map("bbb", "192.254.1.42");
+        set req.http.X-CS-TA = netmapper.map("aaa", "10.200.100.10");
+        set req.http.X-CS-TB = netmapper.map("aaa", "172.16.123.123");
+        set req.http.X-CS-TC = netmapper.map("ccc", "129.129.129.129");
+        set req.http.X-CS-TD = netmapper.map("aaa", "2001:db8:4230::abcd");
+        set req.http.X-CS-TE = netmapper.map("aaa", "2001:db8:4231::abcd");
         return (pass);
     }
 } -start

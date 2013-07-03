@@ -35,12 +35,23 @@
 
 #include "vnm.h"
 
+// note, the set of databases is indexed at runtime by a text
+//  label, and we just iterate strcmp to look them up.  If anyone
+//  actually has a lot of databases and cares, please submit a patch that
+//  implements a hashtable for them!
+
 typedef struct {
     unsigned reload_check_interval;
+    char* label;
     char* fn;
     vnm_db_t* db;
     pthread_t updater;
     struct stat db_stat;
+} vnm_db_file_t;
+
+typedef struct {
+    unsigned db_count;
+    vnm_db_file_t* dbs;
 } vnm_priv_t;
 
 // Copy a str_t*'s data to a const char* in the session workspace,
@@ -64,32 +75,33 @@ static const char* vnm_str_to_vcl(struct sess* sp, const vnm_str_t* str) {
     return rv;
 }
 
-static void* updater_start(void* vp_asvoid) {
-    vnm_priv_t* vp = vp_asvoid;
+static void* updater_start(void* dbf_asvoid) {
+    vnm_db_file_t* dbf = dbf_asvoid;
     struct stat check_stat;
 
     while(1) {
-        sleep(vp->reload_check_interval);
-        if(stat(vp->fn, &check_stat)) {
-            VSL(SLT_Error, 0, "vmod_netmapper: Failed to stat JSON database '%s' for reload check", vp->fn);
+        sleep(dbf->reload_check_interval);
+        if(stat(dbf->fn, &check_stat)) {
+            VSL(SLT_Error, 0, "vmod_netmapper: Failed to stat JSON database '%s' for reload check", dbf->fn);
             continue;
         }
        
-        if(    check_stat.st_mtime != vp->db_stat.st_mtime
-            || check_stat.st_ctime != vp->db_stat.st_ctime
-            || check_stat.st_ino   != vp->db_stat.st_ino
-            || check_stat.st_dev   != vp->db_stat.st_dev) {
+        if(    check_stat.st_mtime != dbf->db_stat.st_mtime
+            || check_stat.st_ctime != dbf->db_stat.st_ctime
+            || check_stat.st_ino   != dbf->db_stat.st_ino
+            || check_stat.st_dev   != dbf->db_stat.st_dev) {
 
-            vnm_db_t* new_db = vnm_db_parse(vp->fn, &vp->db_stat);
+            vnm_db_t* new_db = vnm_db_parse(dbf->fn, &dbf->db_stat);
             if(new_db) {
-                vnm_db_t* old_db = vp->db;
-                rcu_assign_pointer(vp->db, new_db);
+                vnm_db_t* old_db = dbf->db;
+                rcu_assign_pointer(dbf->db, new_db);
                 synchronize_rcu();
-                vnm_db_destruct(old_db);
-                VSL(SLT_CLI, 0, "vmod_netmapper: JSON database '%s' reloaded with new data", vp->fn); // CLI??
+                if(old_db)
+                    vnm_db_destruct(old_db);
+                VSL(SLT_CLI, 0, "vmod_netmapper: JSON database '%s' (re-)loaded with new data", dbf->fn); // CLI??
             }
             else {
-                VSL(SLT_Error, 0, "vmod_netmapper: JSON database '%s' reload failed, continuing with old data", vp->fn);
+                VSL(SLT_Error, 0, "vmod_netmapper: JSON database '%s' reload failed, continuing with old data", dbf->fn);
             }
         }
     }
@@ -100,40 +112,57 @@ static void* updater_start(void* vp_asvoid) {
 static void per_vcl_fini(void* vp_asvoid) {
     vnm_priv_t* vp = vp_asvoid;
 
-    // clean up the updater thread
-    pthread_cancel(vp->updater);
-    pthread_join(vp->updater, NULL);
+    for(unsigned i = 0; i < vp->db_count; i++) {
+        // clean up the updater thread
+        pthread_cancel(vp->dbs[i].updater);
+        pthread_join(vp->dbs[i].updater, NULL);
 
-    // free the most-recent data
-    vnm_db_destruct(vp->db);
-    free(vp->fn);
+        // free the most-recent data
+        vnm_db_destruct(vp->dbs[i].db);
+        free(vp->dbs[i].fn);
+    }
+
+    free(vp->dbs);
 }
 
 /*****************************
  * Actual VMOD/VCL/VRT Hooks *
  *****************************/
 
-void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* json_path, const int reload_interval) {
-    if(priv->priv) {
-        // I think this would be a bug, but it's remotely possible
-        //   this is a situation that has to be handled manually
-        //   during some reload by destructing ourselves, or that
-        //   multiple threads can run vcl_init() for one VCL?
-        WSP(sp, SLT_Error, "vmod_netmapper: per-VCL double-init! Bug?");
-        abort();
+// we serialize all calls to vmod_init() for this vmod globally, because
+//   (a) it's not a perf hotspot anyways and
+//   (b) it is critical that this executes serially for all .init() calls
+//     at *least* within a given VCL (PRIV_VCL context).
+//   (c) I'm not 100% sure that varnish will never call this from two threads
+//     in parallel, either now or in the future, during startup with multiple
+//     VCLs using the module, etc.
+pthread_mutex_t serial_init = PTHREAD_MUTEX_INITIALIZER;
+
+void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* db_label, const char* json_path, const int reload_interval) {
+
+    pthread_mutex_lock(&serial_init);
+
+    vnm_priv_t* vp = priv->priv;
+
+    if(!vp) {
+        priv->priv = vp = calloc(1, sizeof(vnm_priv_t));
+        priv->free = per_vcl_fini;
     }
 
-    vnm_priv_t* vp = malloc(sizeof(vnm_priv_t));
-    vp->reload_check_interval = reload_interval;
-    vp->fn = strdup(json_path);
-    vp->db = vnm_db_parse(vp->fn, &vp->db_stat);
-    if(!vp->db) {
-        VSL(SLT_Error, 0, "vmod_netmapper: Failed initial load of JSON netmapper database %s", vp->fn);
-        abort();
-    }
-    pthread_create(&vp->updater, NULL, updater_start, vp);
-    priv->priv = vp;
-    priv->free = per_vcl_fini;
+    const unsigned db_idx = vp->db_count++;
+    vp->dbs = realloc(vp->dbs, vp->db_count * sizeof(vnm_db_file_t));
+    vnm_db_file_t* dbf = &vp->dbs[db_idx];
+
+    dbf->reload_check_interval = reload_interval;
+    dbf->fn = strdup(json_path);
+    dbf->label = strdup(db_label);
+    memset(&dbf->db_stat, 0, sizeof(struct stat));
+    dbf->db = vnm_db_parse(dbf->fn, &dbf->db_stat);
+    if(!dbf->db)
+        VSL(SLT_Error, 0, "vmod_netmapper: Failed initial load of JSON netmapper database %s (will keep trying periodically)", dbf->fn);
+
+    pthread_mutex_unlock(&serial_init);
+    pthread_create(&dbf->updater, NULL, updater_start, dbf);
 }
 
 // Crazy hack to get per-thread rcu register/unregister, even though
@@ -147,7 +176,7 @@ static pthread_once_t unreg_hack_once = PTHREAD_ONCE_INIT;
 static void destruct_rcu(void* x) { pthread_setspecific(unreg_hack, NULL); rcu_unregister_thread(); }
 static void make_unreg_hack(void) { pthread_key_create(&unreg_hack, destruct_rcu); }
 
-const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* ip_string) {
+const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* db_label, const char* ip_string) {
     assert(sp); assert(priv); assert(priv->priv); assert(ip_string);
     CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
 
@@ -160,22 +189,42 @@ const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* ip_str
         rcu_registered = true;
     }
 
+    // static database index, no thread concerns during runtime...
+    const vnm_priv_t* vp = priv->priv;
+    const vnm_db_file_t* dbf = NULL;
+    for(unsigned i = 0; i < vp->db_count; i++) {
+        if(!strcmp(db_label, vp->dbs[i].label)) {
+            dbf = &vp->dbs[i];
+            break;
+        }
+    }
+
     const char* rv = NULL;
 
-    // normal rcu reader stuff
-    rcu_thread_online();
-    rcu_read_lock();
+    if(!dbf) {
+        VSL(SLT_Error, 0, "vmod_netmapper: JSON database label '%s' is not configured!", db_label);
+    }
+    else {
+        // normal rcu reader stuff
+        rcu_thread_online();
+        rcu_read_lock();
 
-    // search net database.  if match, convert
-    //  string to a vcl string and return it...
-    const vnm_priv_t* vp = priv->priv;
-    const vnm_str_t* str = vnm_lookup(rcu_dereference(vp->db), ip_string);
-    if(str)
-        rv = vnm_str_to_vcl(sp, str);
+        const vnm_db_t* dbptr = rcu_dereference(dbf->db);
+        if(dbptr) {
+            // search net database.  if match, convert
+            //  string to a vcl string and return it...
+            const vnm_str_t* str = vnm_lookup(dbptr, ip_string);
+            if(str)
+                rv = vnm_str_to_vcl(sp, str);
+        }
+        else {
+            VSL(SLT_Error, 0, "vmod_netmapper: JSON database label '%s' was never succesfully loaded!", db_label);
+        }
 
-    // normal rcu reader stuff
-    rcu_read_unlock();
-    rcu_thread_offline();
+        // normal rcu reader stuff
+        rcu_read_unlock();
+        rcu_thread_offline();
+    }
 
     return rv;
 }
