@@ -1,0 +1,16 @@
+1.1 - 2013-07-03
+   Changed the API slightly from 1.0 - now supports multiple databases
+     in a single VCL, which are differentiated by a text label.  VCL context
+     is still used as well (that is, init/map calls in one VCL have no
+     bearing on another).
+   Removed all known fatal errors for things like missing/unloadable
+     database files at startup/runtime.  In the case of a missing or malformed
+     database file at startup, it will complain at startup and keep trying
+     to load the DB on the reload intervals.  Until success, runtime queries
+     will return no-match and also log an error.  In the case of a map request
+     for a non-existent label (never specified in an init call), it returns
+     no-match and logs an error.
+   Fixed docs re: our variant on the build process.
+
+1.0 - 2013-06-24
+   First release
