@@ -7,8 +7,8 @@ Varnish module to map an IP address to a string
 -------------------------------------------------
 
 :Author: Brandon Black
-:Date: 2013-06-24
-:Version: 1.0
+:Date: 2013-07-02
+:Version: 1.1
 :Manual section: 3
 
 SYNOPSIS
@@ -19,11 +19,13 @@ SYNOPSIS
     import netmapper;
     
     sub vcl_init {
-        netmapper.init("/path/to/netmap.json", 42);
+        netmapper.init("mydb", "/path/to/mydb.json", 42);
+        netmapper.init("odb", "/path/to/odb.json", 42);
     }
     
     sub vcl_recv {
-        set req.http.X-Foo = netmapper.map("" + client.ip);
+        set req.http.X-Foo = netmapper.map("mydb", "" + client.ip);
+        set req.http.X-Bar = netmapper.map("odb", "" + client.ip);
     }
 
 DESCRIPTION
@@ -40,19 +42,20 @@ init
 -----
 
 Prototype
-    ``init(STRING DatabaseFile, INT CheckInterval)``
+    ``init(STRING Label, STRING DatabaseFile, INT CheckInterval)``
 Return value
     VOID
 Description
-    Initializes netmapper with a given JSON database and reload check
+    Loads a given JSON database with the given Label and reload check
     interval (in seconds), for this VCL.  The database is checked via
     stat(2) for changes every check interval, and reloaded on the fly
-    when altered.
+    when altered.  The Label is used to differentiate multiple databases
+    during runtime map() calls.
 Example
         ::
 
                 sub vcl_init {
-                    netmapper.init("/path/to/netmap.json", 42);
+                    netmapper.init("mydb", "/path/to/mydb.json", 42);
                 }
 
 
@@ -60,19 +63,19 @@ map
 -----
 
 Prototype
-    ``map(STRING IPAddr)``
+    ``map(STRING Label, STRING IPAddr)``
 Return value
     String, could be undefined if no match.
 Description
     Maps the passed client IP address (in string form) against the
-    data loaded from the JSON database, returning the string key
-    of the set this address belongs to, or NULL (undefined) if
-    not matched by any set.
+    data loaded from the JSON database identified by Label, returning
+    the string key of the set this address belongs to, or NULL (undefined)
+    if not matched by any set.
 Example
         ::
 
                 sub vcl_recv {
-                    set req.http.X-Foo = netmapper.map("" + client.ip);
+                    set req.http.X-Foo = netmapper.map("mydb", "" + client.ip);
                 }
 
 
@@ -153,20 +156,21 @@ INSTALLATION
 
 Usage::
 
- ./configure VARNISHSRC=DIR [VMODDIR=DIR]
+ ./configure VARNISHSRC=DIR [VARNISHTEST=FILE] [VARNISHD=FILE]
 
 `VARNISHSRC` is the directory of the Varnish source tree for which to
 compile your vmod. Both the `VARNISHSRC` and `VARNISHSRC/include`
 will be added to the include search paths for your module.
 
-Optionally you can also set the vmod install directory by adding
-`VMODDIR=DIR` (defaults to the pkg-config discovered directory from your
-Varnish installation).
+By default the varnish source tree must be pre-built, and the varnishd
+and varnishtest binaries will be used directly from it.  Optionally,
+you can specify external binaries for these and build against an
+unbuilt `VARNISHRC`.  Be sure that the source and binaries match!
 
 Make targets:
 
 * make - builds the vmod
-* make install - installs your vmod in `VMODDIR`
+* make install - installs your vmod in $libdir/varnish/vmods/
 * make check - runs the unit tests in ``src/tests/*.vtc``
 
 HISTORY
