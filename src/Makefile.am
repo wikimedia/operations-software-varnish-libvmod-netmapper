@@ -1,14 +1,6 @@
 AM_CPPFLAGS = -I$(VARNISHSRC)/include -I$(VARNISHSRC) -I$(srcdir)/nlt
 
-vmoddir = $(libdir)/varnish/vmods
-vmod_LTLIBRARIES = libvmod_netmapper.la
-
-libvmod_netmapper_la_LDFLAGS = -module -export-dynamic -avoid-version -shared
-libvmod_netmapper_la_LIBS = -lurcu-qsbr -ljansson
-libvmod_netmapper_la_SOURCES = \
-	vcc_if.c \
-	vcc_if.h \
-	vmod_netmapper.c \
+COMMON_SRC = \
 	vnm.c \
 	vnm.h \
 	vnm_strdb.c \
@@ -20,6 +12,18 @@ libvmod_netmapper_la_SOURCES = \
 
 vcc_if.c vcc_if.h: $(VARNISHSRC)/lib/libvmod_std/vmod.py $(top_srcdir)/src/vmod_netmapper.vcc
 	@PYTHON@ $(VARNISHSRC)/lib/libvmod_std/vmod.py $(top_srcdir)/src/vmod_netmapper.vcc
+
+vmoddir = $(libdir)/varnish/vmods
+vmod_LTLIBRARIES = libvmod_netmapper.la
+
+libvmod_netmapper_la_LDFLAGS = -module -export-dynamic -avoid-version -shared
+libvmod_netmapper_la_LIBADD = -lurcu-qsbr -ljansson
+libvmod_netmapper_la_SOURCES = vcc_if.c vcc_if.h vmod_netmapper.c $(COMMON_SRC)
+
+bin_PROGRAMS = vnm_validate
+vnm_validate_CPPFLAGS = $(AM_CPPFLAGS) -DNO_VARNISH
+vnm_validate_LDADD = -ljansson
+vnm_validate_SOURCES = vnm_validate.c $(COMMON_SRC)
 
 VMOD_TDATA = tests/*.json
 VMOD_TESTS = tests/*.vtc

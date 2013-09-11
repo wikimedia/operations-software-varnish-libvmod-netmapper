@@ -18,6 +18,7 @@ if test "x$ac_cv_prog_cc_c99" = xno; then
 	AC_MSG_ERROR([Could not find a C99 compatible compiler])
 fi
 AC_PROG_CPP
+AM_PROG_CC_C_O
 
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
@@ -71,6 +72,8 @@ AC_CHECK_FILE([$VARNISHTEST],
     [AC_MSG_FAILURE([varnishtest binary "$VARNISHTEST" does not exist])]
 )
 
+XLIBS=$LIBS
+
 # userspace-rcu for lockless netmap reload
 AC_CHECK_HEADER(urcu-qsbr.h,[
      AC_CHECK_LIB([urcu-qsbr],[perror],[],AC_MSG_ERROR("liburcu-qsbr missing!"))
@@ -80,6 +83,8 @@ AC_CHECK_HEADER(urcu-qsbr.h,[
 AC_CHECK_HEADER(jansson.h,[
      AC_CHECK_LIB([jansson],[json_object_update],[],AC_MSG_ERROR("libjansson missing!"))
 ], AC_MSG_ERROR("jansson.h missing!"))
+
+LIBS=$XLIBS
 
 AC_CONFIG_FILES([
 	Makefile

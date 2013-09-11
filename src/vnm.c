@@ -17,7 +17,13 @@
  *
  */
 
+#ifdef NO_VARNISH
+#define ERR(fmt,...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
+#else
 #include "bin/varnishd/cache.h"
+#define ERR(fmt,...) VSL(SLT_Error, 0, "vmod_netmapper: " fmt, ##__VA_ARGS__)
+#endif
+
 #include "vnm.h"
 
 #include <assert.h>
@@ -39,8 +45,6 @@
 #include "vnm_strdb.h"
 #include "ntree.h"
 #include "nlist.h"
-
-#define ERR(fmt,...) VSL(SLT_Error, 0, "vmod_netmapper: " fmt, ##__VA_ARGS__)
 
 struct _vnm_db_struct {
     ntree_t* tree;
@@ -146,7 +150,7 @@ static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl,
 }
 
 vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
-    assert(fn); assert(db_stat);
+    assert(fn);
 
     struct stat db_stat_precheck;
     if(stat(fn, &db_stat_precheck)) {
@@ -245,7 +249,8 @@ vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
     json_decref(toplevel);
 
     // copy out stat data for future checks
-    memcpy(db_stat, &db_stat_postcheck, sizeof(struct stat));
+    if(db_stat)
+        memcpy(db_stat, &db_stat_postcheck, sizeof(struct stat));
 
     return d;
 }

@@ -31,3 +31,6 @@ Makefile.in
 
 # Generated manpages
 *.[0-9]
+
+# built binary
+vnm_validate
