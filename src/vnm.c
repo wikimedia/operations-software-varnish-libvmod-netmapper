@@ -87,11 +87,8 @@ static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl,
     char net_str[inlen + 1];
     memcpy(net_str, addr_mask, inlen + 1);
     char* mask_str = strchr(net_str, '/');
-    if(!mask_str) {
-        ERR("JSON database '%s', key '%s': '%s' does not parse as addr/mask", fn, key, net_str);
-        return true;
-    }
-    *mask_str++ = '\0';
+    if(mask_str)
+        *mask_str++ = '\0';
 
     // translate text address + mask to sockaddr stuff (putting mask in port field)
     struct addrinfo* ainfo = NULL;
@@ -118,7 +115,7 @@ static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl,
 
     if(ainfo->ai_family == AF_INET6) {
         const struct sockaddr_in6* sin6 = (struct sockaddr_in6*)ainfo->ai_addr;
-        mask = ntohs(sin6->sin6_port);
+        mask = mask_str ? ntohs(sin6->sin6_port) : 128;
         memcpy(ipv6, sin6->sin6_addr.s6_addr, 16);
         if(check_v4_issues(ipv6, mask)) {
             ERR("JSON database '%s', key '%s': '%s' covers illegal IPv4-like space", fn, key, addr_mask);
@@ -129,7 +126,7 @@ static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl,
     else {
         assert(ainfo->ai_family == AF_INET);
         const struct sockaddr_in* sin = (struct sockaddr_in*)ainfo->ai_addr;
-        mask = ntohs(sin->sin_port) + 96;
+        mask = mask_str ? ntohs(sin->sin_port) + 96 : 128;
         memset(ipv6, 0, 16);
         memcpy(&ipv6[12], &sin->sin_addr.s_addr, 4);
     }
