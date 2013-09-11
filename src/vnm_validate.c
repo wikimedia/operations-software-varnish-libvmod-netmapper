@@ -23,7 +23,7 @@
 #include <stdio.h>
 
 int main(int argc, char* argv[]) {
-    if(argc != 2) {
+    if(argc != 2 && argc != 3) {
         fprintf(stderr,"Must specify an input file!\n");
         return 99;
     }
@@ -31,6 +31,10 @@ int main(int argc, char* argv[]) {
     if(!vdb) {
         fprintf(stderr,"Parsing '%s' failed!\n", argv[1]);
         return 98;
+    }
+    if(argc == 3) {
+        const vnm_str_t* str = vnm_lookup(vdb, argv[2]);
+        fprintf(stderr,"%s => %s\n", argv[2], str ? str->data : "<No-Match>");
     }
     vnm_db_destruct(vdb);
     fprintf(stderr,"OK\n");
