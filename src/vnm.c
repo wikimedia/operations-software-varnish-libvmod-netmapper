@@ -17,7 +17,13 @@
  *
  */
 
+#ifdef NO_VARNISH
+#define ERR(fmt,...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
+#else
 #include "bin/varnishd/cache.h"
+#define ERR(fmt,...) VSL(SLT_Error, 0, "vmod_netmapper: " fmt, ##__VA_ARGS__)
+#endif
+
 #include "vnm.h"
 
 #include <assert.h>
@@ -39,8 +45,6 @@
 #include "vnm_strdb.h"
 #include "ntree.h"
 #include "nlist.h"
-
-#define ERR(fmt,...) VSL(SLT_Error, 0, "vmod_netmapper: " fmt, ##__VA_ARGS__)
 
 struct _vnm_db_struct {
     ntree_t* tree;
@@ -83,11 +87,8 @@ static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl,
     char net_str[inlen + 1];
     memcpy(net_str, addr_mask, inlen + 1);
     char* mask_str = strchr(net_str, '/');
-    if(!mask_str) {
-        ERR("JSON database '%s', key '%s': '%s' does not parse as addr/mask", fn, key, net_str);
-        return true;
-    }
-    *mask_str++ = '\0';
+    if(mask_str)
+        *mask_str++ = '\0';
 
     // translate text address + mask to sockaddr stuff (putting mask in port field)
     struct addrinfo* ainfo = NULL;
@@ -114,7 +115,7 @@ static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl,
 
     if(ainfo->ai_family == AF_INET6) {
         const struct sockaddr_in6* sin6 = (struct sockaddr_in6*)ainfo->ai_addr;
-        mask = ntohs(sin6->sin6_port);
+        mask = mask_str ? ntohs(sin6->sin6_port) : 128;
         memcpy(ipv6, sin6->sin6_addr.s6_addr, 16);
         if(check_v4_issues(ipv6, mask)) {
             ERR("JSON database '%s', key '%s': '%s' covers illegal IPv4-like space", fn, key, addr_mask);
@@ -125,7 +126,7 @@ static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl,
     else {
         assert(ainfo->ai_family == AF_INET);
         const struct sockaddr_in* sin = (struct sockaddr_in*)ainfo->ai_addr;
-        mask = ntohs(sin->sin_port) + 96;
+        mask = mask_str ? ntohs(sin->sin_port) + 96 : 128;
         memset(ipv6, 0, 16);
         memcpy(&ipv6[12], &sin->sin_addr.s_addr, 4);
     }
@@ -146,7 +147,7 @@ static bool append_string_to_nlist(const char* fn, const char* key, nlist_t* nl,
 }
 
 vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
-    assert(fn); assert(db_stat);
+    assert(fn);
 
     struct stat db_stat_precheck;
     if(stat(fn, &db_stat_precheck)) {
@@ -228,14 +229,7 @@ vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
     nlist_append(templist, start_siit, 96, NN_UNDEF);
     nlist_append(templist, start_6to4, 16, NN_UNDEF);
     nlist_append(templist, start_teredo, 32, NN_UNDEF);
-    if(nlist_finish(templist)) {
-        ERR("JSON contains duplicate networks!");
-        vnm_strdb_destroy(d->strdb);
-        free(d);
-        nlist_destroy(templist);
-        json_decref(toplevel);
-        return NULL;
-    }
+    nlist_finish(templist);
 
     // translate to tree for lookup
     d->tree = nlist_xlate_tree(templist);
@@ -245,7 +239,8 @@ vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
     json_decref(toplevel);
 
     // copy out stat data for future checks
-    memcpy(db_stat, &db_stat_postcheck, sizeof(struct stat));
+    if(db_stat)
+        memcpy(db_stat, &db_stat_postcheck, sizeof(struct stat));
 
     return d;
 }

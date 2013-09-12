@@ -2,7 +2,7 @@ varnishtest "Test netmapper vmod"
 
 server s1 {
        rxreq
-       expect req.http.X-CS == "localhosty"
+       expect req.http.X-CS-T0 == "localhosty"
        expect req.http.X-CS-T1 == "localhosty"
        expect req.http.X-CS-T2 == "localhosty"
        expect req.http.X-CS-T3 == "ZZZ"
@@ -17,6 +17,10 @@ server s1 {
        expect req.http.X-CS-TC == <undef>
        expect req.http.X-CS-TD == <undef>
        expect req.http.X-CS-TE == "Carrier Bar"
+       expect req.http.X-CS-TF == "nomask"
+       expect req.http.X-CS-T10 == <undef>
+       expect req.http.X-CS-T11 == "nomask"
+       expect req.http.X-CS-T12 == <undef>
        txresp
 } -start
 
@@ -30,7 +34,7 @@ varnish v1 -vcl+backend {
     }
 
     sub vcl_recv {
-        set req.http.X-CS = netmapper.map("aaa", "" + client.ip);
+        set req.http.X-CS-T0 = netmapper.map("aaa", "" + client.ip);
         set req.http.X-CS-T1 = netmapper.map("aaa", "127.1.2.3");
         set req.http.X-CS-T2 = netmapper.map("aaa", "::1");
         set req.http.X-CS-T3 = netmapper.map("ccc", "123.123.123.123");
@@ -45,6 +49,10 @@ varnish v1 -vcl+backend {
         set req.http.X-CS-TC = netmapper.map("ccc", "129.129.129.129");
         set req.http.X-CS-TD = netmapper.map("aaa", "2001:db8:4230::abcd");
         set req.http.X-CS-TE = netmapper.map("aaa", "2001:db8:4231::abcd");
+        set req.http.X-CS-TF = netmapper.map("aaa", "1.1.1.1");
+        set req.http.X-CS-T10 = netmapper.map("aaa", "1.1.1.2");
+        set req.http.X-CS-T11 = netmapper.map("aaa", "2001:db8::1");
+        set req.http.X-CS-T12 = netmapper.map("aaa", "2001:db8::2");
         return (pass);
     }
 } -start

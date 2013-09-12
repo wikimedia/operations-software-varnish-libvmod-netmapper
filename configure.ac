@@ -1,6 +1,6 @@
 AC_PREREQ(2.59)
 AC_COPYRIGHT([Copyright (c) 2013 Brandon Black <bblack@wikimedia.org>])
-AC_INIT([libvmod-netmapper],[1.1],[bblack@wikimedia.org],[libvmod-netmapper],[https://git.wikimedia.org/summary/operations%2Fsoftware%2Fvarnish%2Flibvmod-netmapper])
+AC_INIT([libvmod-netmapper],[1.2],[bblack@wikimedia.org],[libvmod-netmapper],[https://git.wikimedia.org/summary/operations%2Fsoftware%2Fvarnish%2Flibvmod-netmapper])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([acaux])
 AC_CONFIG_SRCDIR(src/vmod_netmapper.vcc)
@@ -18,6 +18,7 @@ if test "x$ac_cv_prog_cc_c99" = xno; then
 	AC_MSG_ERROR([Could not find a C99 compatible compiler])
 fi
 AC_PROG_CPP
+AM_PROG_CC_C_O
 
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
@@ -71,6 +72,8 @@ AC_CHECK_FILE([$VARNISHTEST],
     [AC_MSG_FAILURE([varnishtest binary "$VARNISHTEST" does not exist])]
 )
 
+XLIBS=$LIBS
+
 # userspace-rcu for lockless netmap reload
 AC_CHECK_HEADER(urcu-qsbr.h,[
      AC_CHECK_LIB([urcu-qsbr],[perror],[],AC_MSG_ERROR("liburcu-qsbr missing!"))
@@ -80,6 +83,8 @@ AC_CHECK_HEADER(urcu-qsbr.h,[
 AC_CHECK_HEADER(jansson.h,[
      AC_CHECK_LIB([jansson],[json_object_update],[],AC_MSG_ERROR("libjansson missing!"))
 ], AC_MSG_ERROR("jansson.h missing!"))
+
+LIBS=$XLIBS
 
 AC_CONFIG_FILES([
 	Makefile
