@@ -36,7 +36,7 @@ struct _nlist {
     net_t* nets;
     unsigned alloc;
     unsigned count;
-    bool finished;
+    bool normalized;
 };
 
 nlist_t* nlist_new(void) {
@@ -44,7 +44,7 @@ nlist_t* nlist_new(void) {
     nl->nets = malloc(sizeof(net_t) * NLIST_INITSIZE);
     nl->alloc = NLIST_INITSIZE;
     nl->count = 0;
-    nl->finished = false;
+    nl->normalized = false;
     return nl;
 }
 
@@ -96,25 +96,6 @@ static int net_sorter(const void* a_void, const void* b_void) {
     return rv;
 }
 
-// sort and check for dupes, true retval indicates failure due to dupes
-static bool nlist_normalize1(nlist_t* nl) {
-    assert(nl);
-
-    if(nl->count) {
-        qsort(nl->nets, nl->count, sizeof(net_t), net_sorter);
-
-        for(unsigned i = 0; i < (nl->count - 1); i++) {
-            net_t* net_a = &nl->nets[i];
-            net_t* net_b = &nl->nets[i + 1];
-            if(net_a->mask == net_b->mask && !memcmp(net_a->ipv6, net_b->ipv6, 16)) {
-               return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned mask) {
     assert(v6a); assert(v6b);
     assert(mask < 128U); // 2x128 would call here w/ 127...
@@ -146,34 +127,42 @@ bool nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
     this_net->mask = mask;
     this_net->dclist = dclist;
 
-    // for raw input, just correct any netmask errors as we insert,
-    //   as these will screw up later sorting for normalize1
     return clear_mask_bits(this_net->ipv6, mask);
 }
 
-// merge adjacent nets with identical dclists recursively...
-static void nlist_normalize2(nlist_t* nl) {
+static bool net_eq(const net_t* na, const net_t* nb) {
+    assert(na); assert(nb);
+    return na->mask == nb->mask && !memcmp(na->ipv6, nb->ipv6, 16);
+}
+
+// normalize ugly random-ish lists
+static void nlist_normalize(nlist_t* nl, const bool post_merge) {
     assert(nl);
 
     if(nl->count) {
+        if(!post_merge)
+            qsort(nl->nets, nl->count, sizeof(net_t), net_sorter);
+
         unsigned idx = nl->count;
         unsigned newcount = nl->count;
         while(--idx > 0) {
             net_t* nb = &nl->nets[idx];
             net_t* na = &nl->nets[idx - 1];
-            if(mergeable_nets(na, nb)) {
-                // na should have the differential bit clear
-                //   thanks to pre-sorting, so just needs mask--
+            const bool ab_eq = net_eq(na, nb);
+            if(ab_eq || mergeable_nets(na, nb)) {
                 nb->mask = MASK_DELETED;
-                na->mask--;
+                if(!ab_eq)
+                    na->mask--;
                 newcount--;
                 unsigned upidx = idx + 1;
                 while(upidx < nl->count) {
                     net_t* nc = &nl->nets[upidx];
                     if(nc->mask != MASK_DELETED) {
-                        if(mergeable_nets(na, nc)) {
+                        const bool ac_eq = net_eq(na, nc);
+                        if(ac_eq || mergeable_nets(na, nc)) {
                             nc->mask = MASK_DELETED;
-                            na->mask--;
+                            if(!ac_eq)
+                                na->mask--;
                             newcount--;
                         }
                         else {
@@ -204,18 +193,14 @@ static void nlist_normalize2(nlist_t* nl) {
             nl->nets = realloc(nl->nets, sizeof(net_t) * nl->alloc);
         }
     }
+
+    nl->normalized = true;
 }
 
-bool nlist_finish(nlist_t* nl) {
+void nlist_finish(nlist_t* nl) {
     assert(nl);
-
-    bool rv = nlist_normalize1(nl);
-    if(!rv) {
-        nlist_normalize2(nl);
-        nl->finished = true;
-    }
-
-    return rv;
+    if(!nl->normalized)
+        nlist_normalize(nl, false);
 }
 
 static bool net_subnet_of(const net_t* sub, const net_t* super) {
@@ -295,15 +280,11 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
     SETBIT_v6(tree_net.ipv6, tree_net.mask - 1);
     nxt_rec_dir(nl, nl_end, nt, tree_net, nt_idx, true);
 
-    // catch missed optimizations during final translation,
-    //   which should be on the default dclist zero
-    //   due to it being implicit for undefined nets in the list,
-    //   and thus not merged with true list entries...
+    // catch missed optimizations during final translation
     unsigned rv;
-    if((nt->store[nt_idx].zero == nt->store[nt_idx].one) && (nt_idx > 0)) {
-        assert(nt->store[nt_idx].zero == NN_SET_DCLIST(0));
+    if(nt->store[nt_idx].zero == nt->store[nt_idx].one && nt_idx > 0) {
         nt->count--; // delete the just-added node
-        rv = NN_SET_DCLIST(0); // retval is now a dclist rather than a node...
+        rv = nt->store[nt_idx].zero;
     }
     else {
         rv = nt_idx;
@@ -313,7 +294,7 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
 
 ntree_t* nlist_xlate_tree(const nlist_t* nl) {
     assert(nl);
-    assert(nl->finished);
+    assert(nl->normalized);
 
     ntree_t* nt = ntree_new();
     const net_t* nlnet = &nl->nets[0];
@@ -345,4 +326,3 @@ ntree_t* nlist_xlate_tree(const nlist_t* nl) {
 
     return nt;
 }
-

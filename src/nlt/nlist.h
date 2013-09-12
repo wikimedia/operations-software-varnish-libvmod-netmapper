@@ -37,8 +37,7 @@ void nlist_destroy(nlist_t* nl);
 bool nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const unsigned dclist);
 
 // Call this when all nlist_append() are complete. 
-// true retval here indicates failure due to duplicate networks
-bool nlist_finish(nlist_t* nl);
+void nlist_finish(nlist_t* nl);
 
 // must pass through _finish() before xlate!
 ntree_t* nlist_xlate_tree(const nlist_t* nl_a);

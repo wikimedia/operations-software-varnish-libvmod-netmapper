@@ -229,14 +229,7 @@ vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
     nlist_append(templist, start_siit, 96, NN_UNDEF);
     nlist_append(templist, start_6to4, 16, NN_UNDEF);
     nlist_append(templist, start_teredo, 32, NN_UNDEF);
-    if(nlist_finish(templist)) {
-        ERR("JSON contains duplicate networks!");
-        vnm_strdb_destroy(d->strdb);
-        free(d);
-        nlist_destroy(templist);
-        json_decref(toplevel);
-        return NULL;
-    }
+    nlist_finish(templist);
 
     // translate to tree for lookup
     d->tree = nlist_xlate_tree(templist);
