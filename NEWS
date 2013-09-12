@@ -1,3 +1,11 @@
+1.2 - 2013-09-12
+   Added vnm_validate cmdline tool.  Exit status indicates JSON parse-ability.
+     Accepts IP addr as extra argument for manual results debugging.
+   Added support for maskless IPs as implicit all-ones netmasks.
+   Bugfix: memory issues in the strings allocator
+   Backported more-robust network optimizer code from gdnsd
+   Fixed "make distcheck"
+
 1.1 - 2013-07-03
    Changed the API slightly from 1.0 - now supports multiple databases
      in a single VCL, which are differentiated by a text label.  VCL context
