@@ -1,1 +1,2 @@
 /usr/lib/*/varnish/vmods/libvmod_netmapper.so
+/usr/bin/vnm_validate

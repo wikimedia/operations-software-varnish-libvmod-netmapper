@@ -1,3 +1,9 @@
+libvmod-netmapper (1.2-1) unstable; urgency=low
+
+  * Bump upstream
+
+ -- Brandon Black <bblack@wikimedia.org>  Thu, 12 Sep 2013 17:53:16 +0000
+
 libvmod-netmapper (1.1-1) unstable; urgency=low
 
   * Bump upstream
