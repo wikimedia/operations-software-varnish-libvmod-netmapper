@@ -1,3 +1,5 @@
+VARNISHSRC ?= $(top_srcdir)
+
 AM_CPPFLAGS = -I$(VARNISHSRC)/include -I$(VARNISHSRC) -I$(srcdir)/nlt
 
 COMMON_SRC = \
@@ -10,8 +12,8 @@ COMMON_SRC = \
 	nlt/ntree.c \
 	nlt/ntree.h
 
-vcc_if.c vcc_if.h: $(VARNISHSRC)/lib/libvmod_std/vmod.py $(top_srcdir)/src/vmod_netmapper.vcc
-	@PYTHON@ $(VARNISHSRC)/lib/libvmod_std/vmod.py $(top_srcdir)/src/vmod_netmapper.vcc
+vcc_if.c vcc_if.h: $(VARNISHSRC)/lib/libvmod_std/vmod.py $(srcdir)/vmod_netmapper.vcc
+	@PYTHON@ $(VARNISHSRC)/lib/libvmod_std/vmod.py $(srcdir)/vmod_netmapper.vcc
 
 vmoddir = $(libdir)/varnish/vmods
 vmod_LTLIBRARIES = libvmod_netmapper.la
