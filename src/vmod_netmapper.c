@@ -58,19 +58,13 @@ typedef struct {
 //   so that after return we're not holding references to data in
 //   the vnm db, so that it can be swapped for update between...
 static const char* vnm_str_to_vcl(struct sess* sp, const vnm_str_t* str) {
-    const char* rv = NULL;
+    char* rv = NULL;
     if(str->data) {
-        unsigned used = 0;
-        const unsigned space = WS_Reserve(sp->ws, 0);
-        if(space < str->len) {
+        rv = WS_Alloc(sp->wrk->ws, str->len);
+        if(!rv)
             WSP(sp, SLT_Error, "vmod_netmapper: no space for string retval!");
-        }
-        else {
-            used = str->len;
-            rv = sp->ws->f;
-            memcpy(sp->ws->f, str->data, used);
-        }
-        WS_Release(sp->ws, used);
+        else
+            memcpy(rv, str->data, str->len);
     }
     return rv;
 }
