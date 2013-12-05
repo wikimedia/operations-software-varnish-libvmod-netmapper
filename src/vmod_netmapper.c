@@ -114,9 +114,11 @@ static void per_vcl_fini(void* vp_asvoid) {
         // free the most-recent data
         vnm_db_destruct(vp->dbs[i].db);
         free(vp->dbs[i].fn);
+        free(vp->dbs[i].label);
     }
 
     free(vp->dbs);
+    free(vp);
 }
 
 /*****************************
