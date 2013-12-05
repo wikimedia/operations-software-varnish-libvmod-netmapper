@@ -123,19 +123,7 @@ static void per_vcl_fini(void* vp_asvoid) {
  * Actual VMOD/VCL/VRT Hooks *
  *****************************/
 
-// we serialize all calls to vmod_init() for this vmod globally, because
-//   (a) it's not a perf hotspot anyways and
-//   (b) it is critical that this executes serially for all .init() calls
-//     at *least* within a given VCL (PRIV_VCL context).
-//   (c) I'm not 100% sure that varnish will never call this from two threads
-//     in parallel, either now or in the future, during startup with multiple
-//     VCLs using the module, etc.
-pthread_mutex_t serial_init = PTHREAD_MUTEX_INITIALIZER;
-
 void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* db_label, const char* json_path, const int reload_interval) {
-
-    pthread_mutex_lock(&serial_init);
-
     vnm_priv_t* vp = priv->priv;
 
     if(!vp) {
@@ -155,7 +143,6 @@ void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* db_label, co
     if(!dbf->db)
         VSL(SLT_Error, 0, "vmod_netmapper: Failed initial load of JSON netmapper database %s (will keep trying periodically)", dbf->fn);
 
-    pthread_mutex_unlock(&serial_init);
     pthread_create(&dbf->updater, NULL, updater_start, dbf);
 }
 
