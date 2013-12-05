@@ -270,5 +270,8 @@ const vnm_str_t* vnm_lookup(const vnm_db_t* d, const char* ip_string) {
         stridx = ntree_lookup(d->tree, ainfo->ai_addr);
     }
 
+    if(ainfo)
+        freeaddrinfo(ainfo);
+
     return vnm_strdb_get(d->strdb, stridx);
 }
