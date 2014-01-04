@@ -51,7 +51,7 @@ typedef struct {
 
 typedef struct {
     unsigned db_count;
-    vnm_db_file_t* dbs;
+    vnm_db_file_t** dbs;
 } vnm_priv_t;
 
 // Copy a str_t*'s data to a const char* in the session workspace,
@@ -108,13 +108,14 @@ static void per_vcl_fini(void* vp_asvoid) {
 
     for(unsigned i = 0; i < vp->db_count; i++) {
         // clean up the updater thread
-        pthread_cancel(vp->dbs[i].updater);
-        pthread_join(vp->dbs[i].updater, NULL);
+        pthread_cancel(vp->dbs[i]->updater);
+        pthread_join(vp->dbs[i]->updater, NULL);
 
         // free the most-recent data
-        vnm_db_destruct(vp->dbs[i].db);
-        free(vp->dbs[i].fn);
-        free(vp->dbs[i].label);
+        vnm_db_destruct(vp->dbs[i]->db);
+        free(vp->dbs[i]->fn);
+        free(vp->dbs[i]->label);
+        free(vp->dbs[i]);
     }
 
     free(vp->dbs);
@@ -134,8 +135,8 @@ void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* db_label, co
     }
 
     const unsigned db_idx = vp->db_count++;
-    vp->dbs = realloc(vp->dbs, vp->db_count * sizeof(vnm_db_file_t));
-    vnm_db_file_t* dbf = &vp->dbs[db_idx];
+    vp->dbs = realloc(vp->dbs, vp->db_count * sizeof(vnm_db_file_t*));
+    vnm_db_file_t* dbf = vp->dbs[db_idx] = malloc(sizeof(vnm_db_file_t));
 
     dbf->reload_check_interval = reload_interval;
     dbf->fn = strdup(json_path);
@@ -176,8 +177,8 @@ const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* db_lab
     const vnm_priv_t* vp = priv->priv;
     const vnm_db_file_t* dbf = NULL;
     for(unsigned i = 0; i < vp->db_count; i++) {
-        if(!strcmp(db_label, vp->dbs[i].label)) {
-            dbf = &vp->dbs[i];
+        if(!strcmp(db_label, vp->dbs[i]->label)) {
+            dbf = vp->dbs[i];
             break;
         }
     }
