@@ -85,6 +85,10 @@ static void* updater_start(void* dbf_asvoid) {
             || check_stat.st_ino   != dbf->db_stat.st_ino
             || check_stat.st_dev   != dbf->db_stat.st_dev) {
 
+            // this is just to prevent resource leaks on pthread_cancel
+            //   racing a reload, nothing to do with the rcu stuff.
+            pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+
             vnm_db_t* new_db = vnm_db_parse(dbf->fn, &dbf->db_stat);
             if(new_db) {
                 vnm_db_t* old_db = dbf->db;
@@ -97,6 +101,8 @@ static void* updater_start(void* dbf_asvoid) {
             else {
                 VSL(SLT_Error, 0, "vmod_netmapper: JSON database '%s' reload failed, continuing with old data", dbf->fn);
             }
+
+            pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         }
     }
 
