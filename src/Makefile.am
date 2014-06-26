@@ -27,14 +27,17 @@ vnm_validate_CPPFLAGS = $(AM_CPPFLAGS) -DNO_VARNISH
 vnm_validate_LDADD = -ljansson
 vnm_validate_SOURCES = vnm_validate.c $(COMMON_SRC)
 
-VMOD_TDATA = tests/test01a.json tests/test01b.json tests/test01c.json
+VMOD_TDATA = tests/test01a.json tests/test01b.json tests/test01c.json tests/test01d.json tests/test01e.json
 VMOD_TESTS = tests/test01.vtc
 .PHONY: $(VMOD_TESTS) $(VMOD_TDATA)
 
 $(VMOD_TESTS): libvmod_netmapper.la
 	$(VARNISHTEST) -Dvarnishd=$(VARNISHD) -Dvmod_topbuild=$(abs_top_builddir) -Dvmod_topsrc=$(abs_top_srcdir) $(srcdir)/$@
 
-check: $(VMOD_TESTS)
+validate-tests:
+	for jin in $(VMOD_TDATA); do $(abs_top_builddir)/src/vnm_validate $$jin; done
+
+check: $(VMOD_TESTS) validate-tests
 
 EXTRA_DIST = nlt/README vmod_netmapper.vcc $(VMOD_TESTS) $(VMOD_TDATA)
 

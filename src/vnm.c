@@ -163,8 +163,8 @@ vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
         return NULL;
     }
 
-    if(!json_is_object(toplevel)) {
-        ERR("JSON database %s top-level is not an object!", fn);
+    if(!json_is_object(toplevel) && !(json_is_array(toplevel) && !json_array_size(toplevel))) {
+        ERR("JSON database %s top-level is not an object or empty array!", fn);
         json_decref(toplevel);
         return NULL;
     }
@@ -190,38 +190,40 @@ vnm_db_t* vnm_db_parse(const char* fn, struct stat* db_stat) {
     d->tree = NULL;
     d->strdb = vnm_strdb_new();
 
-    // iterate the keys...
-    const char* key;
-    json_t* val;
-    void *iter = json_object_iter(toplevel);
-    while(iter) {
-        key = json_object_iter_key(iter);
-        val = json_object_iter_value(iter);
-        if(!json_is_array(val)) {
-            ERR("JSON database %s: value for key '%s' should be an array!", fn, key);
-            nlist_destroy(templist);
-            vnm_strdb_destroy(d->strdb);
-            free(d);
-            json_decref(toplevel);
-            return NULL;
-        }
-
-        const unsigned stridx = vnm_strdb_add(d->strdb, key);
-        const unsigned nnets = json_array_size(val);
-        for(unsigned i = 0; i < nnets; i++) {
-            const json_t* net = json_array_get(val, i);
-            const bool net_isstr = json_is_string(net);
-            if(!net_isstr)
-                ERR("JSON database %s: array member %u for key '%s' should be an address string!", fn, i, key);
-            if(!net_isstr || append_string_to_nlist(fn, key, templist, json_string_value(net), stridx)) {
+    if(json_is_object(toplevel)) {
+        // iterate the keys...
+        const char* key;
+        json_t* val;
+        void *iter = json_object_iter(toplevel);
+        while(iter) {
+            key = json_object_iter_key(iter);
+            val = json_object_iter_value(iter);
+            if(!json_is_array(val)) {
+                ERR("JSON database %s: value for key '%s' should be an array!", fn, key);
                 nlist_destroy(templist);
                 vnm_strdb_destroy(d->strdb);
                 free(d);
                 json_decref(toplevel);
                 return NULL;
             }
+
+            const unsigned stridx = vnm_strdb_add(d->strdb, key);
+            const unsigned nnets = json_array_size(val);
+            for(unsigned i = 0; i < nnets; i++) {
+                const json_t* net = json_array_get(val, i);
+                const bool net_isstr = json_is_string(net);
+                if(!net_isstr)
+                    ERR("JSON database %s: array member %u for key '%s' should be an address string!", fn, i, key);
+                if(!net_isstr || append_string_to_nlist(fn, key, templist, json_string_value(net), stridx)) {
+                    nlist_destroy(templist);
+                    vnm_strdb_destroy(d->strdb);
+                    free(d);
+                    json_decref(toplevel);
+                    return NULL;
+                }
+            }
+            iter = json_object_iter_next(toplevel, iter);
         }
-        iter = json_object_iter_next(toplevel, iter);
     }
 
     // add undefined areas for the translated v4 subspaces and optimize the list
