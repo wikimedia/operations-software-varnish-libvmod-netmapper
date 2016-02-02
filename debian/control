@@ -2,8 +2,9 @@ Source: libvmod-netmapper
 Section: web
 Priority: extra
 Maintainer: Brandon Black <bblack@wikimedia.org>
-Build-Depends: debhelper (>= 9), autotools-dev, dh-autoreconf, varnish (>= 3), libjansson-dev, liburcu-dev
-Standards-Version: 3.9.3
+Uploaders: Emanuele Rocca <ema@wikimedia.org>
+Build-Depends: debhelper (>= 9), autotools-dev, dh-autoreconf, libvarnishapi-dev (>= 4.1.1), libjansson-dev, liburcu-dev
+Standards-Version: 3.9.6
 Homepage: https://git.wikimedia.org/summary/operations/software/varnish/libvmod-netmapper
 #Vcs-Git: https://gerrit.wikimedia.org/r/operations/software/varnish/libvmod-netmapper
 #Vcs-Browser: https://git.wikimedia.org/summary/operations/software/varnish/libvmod-netmapper
@@ -11,7 +12,7 @@ Homepage: https://git.wikimedia.org/summary/operations/software/varnish/libvmod-
 Package: libvmod-netmapper
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: ${shlibs:Depends}, ${misc:Depends}, varnish (>= 3)
+Depends: varnish (>= 4.1.1), ${shlibs:Depends}, ${misc:Depends}
 Description: Varnish VMOD for mapping IP networks to strings
  Loads a JSON database mapping networks to strings, matches IP addresses
    against this database.

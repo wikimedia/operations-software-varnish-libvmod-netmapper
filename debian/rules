@@ -15,15 +15,7 @@ export DH_OPTIONS
 %:
 	dh $@  --with autoreconf
 
-# vmods require a varnish source tree (matching the binary version we're using!)
-#  in order to compile, so we fetch one just before ./configure.  This is a bit
-#  hacky, but seems to work ok so far.
-
-override_dh_auto_configure:
-	apt-get source varnish=`dpkg-query -W varnish | cut -f2`
-	dh_auto_configure -- VARNISHSRC=./varnish-3* VARNISHD=/usr/sbin/varnishd VARNISHTEST=/usr/bin/varnishtest
-
 override_dh_strip:
 	dh_strip --dbg-package=libvmod-netmapper-dbg
 
-.PHONY: override_dh_auto_configure override_dh_strip
+.PHONY: override_dh_strip
