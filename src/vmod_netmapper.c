@@ -18,7 +18,8 @@
  */
 
 #include "vrt.h"
-#include "bin/varnishd/cache.h"
+
+#include "cache/cache.h"
 #include "vcc_if.h"
 
 #include <stdbool.h>
@@ -51,26 +52,24 @@ typedef struct {
 
 typedef struct {
     unsigned db_count;
-    vnm_db_file_t* dbs;
+    vnm_db_file_t** dbs;
 } vnm_priv_t;
 
 // Copy a str_t*'s data to a const char* in the session workspace,
 //   so that after return we're not holding references to data in
 //   the vnm db, so that it can be swapped for update between...
-static const char* vnm_str_to_vcl(struct sess* sp, const vnm_str_t* str) {
-    const char* rv = NULL;
+static const char* vnm_str_to_vcl(const struct vrt_ctx *ctx, const vnm_str_t* str) {
+    char* rv = NULL;
+    struct vsl_log *vsl;
+
+    CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+
     if(str->data) {
-        unsigned used = 0;
-        const unsigned space = WS_Reserve(sp->ws, 0);
-        if(space < str->len) {
-            WSP(sp, SLT_Error, "vmod_netmapper: no space for string retval!");
-        }
-        else {
-            used = str->len;
-            rv = sp->ws->f;
-            memcpy(sp->ws->f, str->data, used);
-        }
-        WS_Release(sp->ws, used);
+        rv = WS_Alloc(ctx->ws, str->len);
+        if(!rv)
+            VSLb(vsl, SLT_Error, "vmod_netmapper: no space for string retval!");
+        else
+            memcpy(rv, str->data, str->len);
     }
     return rv;
 }
@@ -91,6 +90,10 @@ static void* updater_start(void* dbf_asvoid) {
             || check_stat.st_ino   != dbf->db_stat.st_ino
             || check_stat.st_dev   != dbf->db_stat.st_dev) {
 
+            // this is just to prevent resource leaks on pthread_cancel
+            //   racing a reload, nothing to do with the rcu stuff.
+            pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+
             vnm_db_t* new_db = vnm_db_parse(dbf->fn, &dbf->db_stat);
             if(new_db) {
                 vnm_db_t* old_db = dbf->db;
@@ -103,6 +106,8 @@ static void* updater_start(void* dbf_asvoid) {
             else {
                 VSL(SLT_Error, 0, "vmod_netmapper: JSON database '%s' reload failed, continuing with old data", dbf->fn);
             }
+
+            pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         }
     }
 
@@ -114,34 +119,25 @@ static void per_vcl_fini(void* vp_asvoid) {
 
     for(unsigned i = 0; i < vp->db_count; i++) {
         // clean up the updater thread
-        pthread_cancel(vp->dbs[i].updater);
-        pthread_join(vp->dbs[i].updater, NULL);
+        pthread_cancel(vp->dbs[i]->updater);
+        pthread_join(vp->dbs[i]->updater, NULL);
 
         // free the most-recent data
-        vnm_db_destruct(vp->dbs[i].db);
-        free(vp->dbs[i].fn);
+        vnm_db_destruct(vp->dbs[i]->db);
+        free(vp->dbs[i]->fn);
+        free(vp->dbs[i]->label);
+        free(vp->dbs[i]);
     }
 
     free(vp->dbs);
+    free(vp);
 }
 
 /*****************************
  * Actual VMOD/VCL/VRT Hooks *
  *****************************/
 
-// we serialize all calls to vmod_init() for this vmod globally, because
-//   (a) it's not a perf hotspot anyways and
-//   (b) it is critical that this executes serially for all .init() calls
-//     at *least* within a given VCL (PRIV_VCL context).
-//   (c) I'm not 100% sure that varnish will never call this from two threads
-//     in parallel, either now or in the future, during startup with multiple
-//     VCLs using the module, etc.
-pthread_mutex_t serial_init = PTHREAD_MUTEX_INITIALIZER;
-
-void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* db_label, const char* json_path, const int reload_interval) {
-
-    pthread_mutex_lock(&serial_init);
-
+VCL_VOID vmod_init(VRT_CTX, struct vmod_priv *priv, VCL_STRING db_label, VCL_STRING json_path, VCL_INT reload_interval) {
     vnm_priv_t* vp = priv->priv;
 
     if(!vp) {
@@ -150,8 +146,8 @@ void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* db_label, co
     }
 
     const unsigned db_idx = vp->db_count++;
-    vp->dbs = realloc(vp->dbs, vp->db_count * sizeof(vnm_db_file_t));
-    vnm_db_file_t* dbf = &vp->dbs[db_idx];
+    vp->dbs = realloc(vp->dbs, vp->db_count * sizeof(vnm_db_file_t*));
+    vnm_db_file_t* dbf = vp->dbs[db_idx] = malloc(sizeof(vnm_db_file_t));
 
     dbf->reload_check_interval = reload_interval;
     dbf->fn = strdup(json_path);
@@ -161,7 +157,6 @@ void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* db_label, co
     if(!dbf->db)
         VSL(SLT_Error, 0, "vmod_netmapper: Failed initial load of JSON netmapper database %s (will keep trying periodically)", dbf->fn);
 
-    pthread_mutex_unlock(&serial_init);
     pthread_create(&dbf->updater, NULL, updater_start, dbf);
 }
 
@@ -176,9 +171,9 @@ static pthread_once_t unreg_hack_once = PTHREAD_ONCE_INIT;
 static void destruct_rcu(void* x) { pthread_setspecific(unreg_hack, NULL); rcu_unregister_thread(); }
 static void make_unreg_hack(void) { pthread_key_create(&unreg_hack, destruct_rcu); }
 
-const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* db_label, const char* ip_string) {
-    assert(sp); assert(priv); assert(priv->priv); assert(ip_string);
-    CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
+const char* vmod_map(const struct vrt_ctx *ctx, struct vmod_priv* priv, const char* db_label, const char* ip_string) {
+    assert(ctx); assert(priv); assert(priv->priv); assert(ip_string);
+	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
 
     // The rest of the rcu register/unregister hack
     static __thread bool rcu_registered = false;
@@ -193,8 +188,8 @@ const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* db_lab
     const vnm_priv_t* vp = priv->priv;
     const vnm_db_file_t* dbf = NULL;
     for(unsigned i = 0; i < vp->db_count; i++) {
-        if(!strcmp(db_label, vp->dbs[i].label)) {
-            dbf = &vp->dbs[i];
+        if(!strcmp(db_label, vp->dbs[i]->label)) {
+            dbf = vp->dbs[i];
             break;
         }
     }
@@ -215,7 +210,7 @@ const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* db_lab
             //  string to a vcl string and return it...
             const vnm_str_t* str = vnm_lookup(dbptr, ip_string);
             if(str)
-                rv = vnm_str_to_vcl(sp, str);
+                rv = vnm_str_to_vcl(ctx, str);
         }
         else {
             VSL(SLT_Error, 0, "vmod_netmapper: JSON database label '%s' was never succesfully loaded!", db_label);

@@ -24,7 +24,6 @@
 #include <stdlib.h>
 
 #define NLIST_INITSIZE 64
-#define MASK_DELETED 0xFFFFFFFF
 
 typedef struct {
     uint8_t ipv6[16];
@@ -110,9 +109,14 @@ static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned
 
 static bool mergeable_nets(const net_t* na, const net_t* nb) {
     assert(na); assert(nb);
-    return (na->mask == nb->mask
-        && na->dclist == nb->dclist
-        && masked_net_eq(na->ipv6, nb->ipv6, na->mask - 1));
+    bool rv = false;
+    if(na->dclist == nb->dclist) {
+        if(na->mask == nb->mask)
+            rv = masked_net_eq(na->ipv6, nb->ipv6, na->mask - 1);
+        else if(na->mask < nb->mask)
+            rv = masked_net_eq(na->ipv6, nb->ipv6, na->mask);
+    }
+    return rv;
 }
 
 bool nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const unsigned dclist) {
@@ -135,62 +139,71 @@ static bool net_eq(const net_t* na, const net_t* nb) {
     return na->mask == nb->mask && !memcmp(na->ipv6, nb->ipv6, 16);
 }
 
-// normalize ugly random-ish lists
+// do a single pass of forward-normalization
+//   on a sorted nlist, then sort the result.
+static bool nlist_normalize_1pass(nlist_t* nl) {
+    assert(nl); assert(nl->count);
+
+    bool rv = false;
+
+    const unsigned oldcount = nl->count;
+    unsigned newcount = nl->count;
+    unsigned i = 0;
+    while(i < oldcount) {
+        net_t* na = &nl->nets[i];
+        unsigned j = i + 1;
+        while(j < oldcount) {
+            net_t* nb = &nl->nets[j];
+            if(net_eq(na, nb)) { // net+mask match, dclist may or may not match
+                // fall-through past else - ugly, but easier for future upstream merges
+            }
+            else if(mergeable_nets(na, nb)) { // dclists match, nets adjacent (masks equal) or subnet-of
+                if(na->mask == nb->mask)
+                    na->mask--;
+            }
+            else {
+                break;
+            }
+            nb->mask = 0xFFFF; // illegally-huge, to sort deletes later
+            memset(nb->ipv6, 0xFF, 16); // all-1's, also for sort...
+            newcount--;
+            j++;
+        }
+        i = j;
+    }
+
+    if(newcount != oldcount) { // merges happened above
+        // the "deleted" entries have all-1's IPs and >legal masks, so they
+        //   sort to the end...
+        qsort(nl->nets, oldcount, sizeof(net_t), net_sorter);
+
+        // reset the count to ignore the deleted entries at the end
+        nl->count = newcount;
+
+        // signal need for another pass
+        rv = true;
+    }
+
+    return rv;
+}
+
 static void nlist_normalize(nlist_t* nl, const bool post_merge) {
     assert(nl);
 
     if(nl->count) {
+        // initial sort, unless already sorted by the merge process
         if(!post_merge)
             qsort(nl->nets, nl->count, sizeof(net_t), net_sorter);
 
-        unsigned idx = nl->count;
-        unsigned newcount = nl->count;
-        while(--idx > 0) {
-            net_t* nb = &nl->nets[idx];
-            net_t* na = &nl->nets[idx - 1];
-            const bool ab_eq = net_eq(na, nb);
-            if(ab_eq || mergeable_nets(na, nb)) {
-                nb->mask = MASK_DELETED;
-                if(!ab_eq)
-                    na->mask--;
-                newcount--;
-                unsigned upidx = idx + 1;
-                while(upidx < nl->count) {
-                    net_t* nc = &nl->nets[upidx];
-                    if(nc->mask != MASK_DELETED) {
-                        const bool ac_eq = net_eq(na, nc);
-                        if(ac_eq || mergeable_nets(na, nc)) {
-                            nc->mask = MASK_DELETED;
-                            if(!ac_eq)
-                                na->mask--;
-                            newcount--;
-                        }
-                        else {
-                            break;
-                        }
-                    }
-                    upidx++;
-                }
-            }
-        }
+        // iterate merge+sort passes until no further merges are found
+        while(nlist_normalize_1pass(nl))
+            ; // empty
 
-        if(newcount != nl->count) { // merges happened
-            net_t* newnets = malloc(sizeof(net_t) * newcount);
-            unsigned newidx = 0;
-            for(unsigned i = 0; i < nl->count; i++) {
-                net_t* n = &nl->nets[i];
-                if(n->mask != MASK_DELETED)
-                    memcpy(&newnets[newidx++], n, sizeof(net_t));
-            }
-            assert(newidx == newcount);
-            free(nl->nets);
-            nl->nets = newnets;
-            nl->count = newcount;
-            nl->alloc = newcount;
-        }
-        else { // just optimize nets size
+        // optimize storage space
+        if(nl->count != nl->alloc) {
+            assert(nl->count < nl->alloc);
             nl->alloc = nl->count;
-            nl->nets = realloc(nl->nets, sizeof(net_t) * nl->alloc);
+            nl->nets = realloc(nl->nets, nl->alloc * sizeof(net_t));
         }
     }
 
@@ -235,7 +248,7 @@ static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* n
     //   ntree node...
     if(nl < nl_end && net_subnet_of(nl, &tree_net)) {
         // exact match, consume...
-        if(tree_net.mask == nl->mask && !memcmp(tree_net.ipv6, nl->ipv6, 16)) { // exact match on zero
+        if(tree_net.mask == nl->mask) {
             (*nlp)++; // consume *nlp and move to next
             // need to pre-check for a deeper subnet next in the list.
             // We use the consumed entry as the new default and keep recursing
@@ -280,15 +293,14 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
     SETBIT_v6(tree_net.ipv6, tree_net.mask - 1);
     nxt_rec_dir(nl, nl_end, nt, tree_net, nt_idx, true);
 
+    unsigned rv = nt_idx;
+
     // catch missed optimizations during final translation
-    unsigned rv;
     if(nt->store[nt_idx].zero == nt->store[nt_idx].one && nt_idx > 0) {
         nt->count--; // delete the just-added node
         rv = nt->store[nt_idx].zero;
     }
-    else {
-        rv = nt_idx;
-    }
+
     return rv;
 }
 

@@ -9,18 +9,20 @@ server s1 {
        expect req.http.X-CS-T4 == "Carrier Foo"
        expect req.http.X-CS-T5 == "Carrier Bar"
        expect req.http.X-CS-T6 == "XYZZY"
-       expect req.http.X-CS-T7 == <undef>
+       expect req.http.X-CS-T7 == ""
        expect req.http.X-CS-T8 == "Carrier Foo"
-       expect req.http.X-CS-T9 == <undef>
+       expect req.http.X-CS-T9 == ""
        expect req.http.X-CS-TA == "Carrier Foo"
        expect req.http.X-CS-TB == "Carrier Bar"
-       expect req.http.X-CS-TC == <undef>
-       expect req.http.X-CS-TD == <undef>
+       expect req.http.X-CS-TC == ""
+       expect req.http.X-CS-TD == ""
        expect req.http.X-CS-TE == "Carrier Bar"
        expect req.http.X-CS-TF == "nomask"
-       expect req.http.X-CS-T10 == <undef>
+       expect req.http.X-CS-T10 == ""
        expect req.http.X-CS-T11 == "nomask"
-       expect req.http.X-CS-T12 == <undef>
+       expect req.http.X-CS-T12 == ""
+       expect req.http.X-CS-T13 == ""
+       expect req.http.X-CS-T14 == ""
        txresp
 } -start
 
@@ -31,6 +33,8 @@ varnish v1 -vcl+backend {
         netmapper.init("aaa", "${vmod_topsrc}/src/tests/test01a.json", 1);
         netmapper.init("bbb", "${vmod_topsrc}/src/tests/test01b.json", 1);
         netmapper.init("ccc", "${vmod_topsrc}/src/tests/test01c.json", 1);
+        netmapper.init("ddd", "${vmod_topsrc}/src/tests/test01d.json", 1);
+        netmapper.init("eee", "${vmod_topsrc}/src/tests/test01e.json", 1);
     }
 
     sub vcl_recv {
@@ -53,6 +57,8 @@ varnish v1 -vcl+backend {
         set req.http.X-CS-T10 = netmapper.map("aaa", "1.1.1.2");
         set req.http.X-CS-T11 = netmapper.map("aaa", "2001:db8::1");
         set req.http.X-CS-T12 = netmapper.map("aaa", "2001:db8::2");
+        set req.http.X-CS-T13 = netmapper.map("ddd", "2001:db8::2");
+        set req.http.X-CS-T14 = netmapper.map("eee", "2001:db8::2");
         return (pass);
     }
 } -start

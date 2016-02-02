@@ -114,8 +114,7 @@ static inline bool CHKBIT_v4(const uint32_t ip, const unsigned maskbit) {
 }
 
 static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip) {
-    assert(tree); assert(ip);
-    assert(tree->ipv4);
+    assert(tree); assert(tree->ipv4);
 
     unsigned chkbit = 0;
     unsigned offset = tree->ipv4;
