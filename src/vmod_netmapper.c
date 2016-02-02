@@ -18,7 +18,8 @@
  */
 
 #include "vrt.h"
-#include "bin/varnishd/cache.h"
+
+#include "cache/cache.h"
 #include "vcc_if.h"
 
 #include <stdbool.h>
@@ -57,12 +58,16 @@ typedef struct {
 // Copy a str_t*'s data to a const char* in the session workspace,
 //   so that after return we're not holding references to data in
 //   the vnm db, so that it can be swapped for update between...
-static const char* vnm_str_to_vcl(struct sess* sp, const vnm_str_t* str) {
+static const char* vnm_str_to_vcl(const struct vrt_ctx *ctx, const vnm_str_t* str) {
     char* rv = NULL;
+    struct vsl_log *vsl;
+
+    CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+
     if(str->data) {
-        rv = WS_Alloc(sp->wrk->ws, str->len);
+        rv = WS_Alloc(ctx->ws, str->len);
         if(!rv)
-            WSP(sp, SLT_Error, "vmod_netmapper: no space for string retval!");
+            VSLb(vsl, SLT_Error, "vmod_netmapper: no space for string retval!");
         else
             memcpy(rv, str->data, str->len);
     }
@@ -132,7 +137,7 @@ static void per_vcl_fini(void* vp_asvoid) {
  * Actual VMOD/VCL/VRT Hooks *
  *****************************/
 
-void vmod_init(struct sess *sp, struct vmod_priv *priv, const char* db_label, const char* json_path, const int reload_interval) {
+VCL_VOID vmod_init(VRT_CTX, struct vmod_priv *priv, VCL_STRING db_label, VCL_STRING json_path, VCL_INT reload_interval) {
     vnm_priv_t* vp = priv->priv;
 
     if(!vp) {
@@ -166,9 +171,9 @@ static pthread_once_t unreg_hack_once = PTHREAD_ONCE_INIT;
 static void destruct_rcu(void* x) { pthread_setspecific(unreg_hack, NULL); rcu_unregister_thread(); }
 static void make_unreg_hack(void) { pthread_key_create(&unreg_hack, destruct_rcu); }
 
-const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* db_label, const char* ip_string) {
-    assert(sp); assert(priv); assert(priv->priv); assert(ip_string);
-    CHECK_OBJ_NOTNULL(sp, SESS_MAGIC);
+const char* vmod_map(const struct vrt_ctx *ctx, struct vmod_priv* priv, const char* db_label, const char* ip_string) {
+    assert(ctx); assert(priv); assert(priv->priv); assert(ip_string);
+	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
 
     // The rest of the rcu register/unregister hack
     static __thread bool rcu_registered = false;
@@ -205,7 +210,7 @@ const char* vmod_map(struct sess *sp, struct vmod_priv* priv, const char* db_lab
             //  string to a vcl string and return it...
             const vnm_str_t* str = vnm_lookup(dbptr, ip_string);
             if(str)
-                rv = vnm_str_to_vcl(sp, str);
+                rv = vnm_str_to_vcl(ctx, str);
         }
         else {
             VSL(SLT_Error, 0, "vmod_netmapper: JSON database label '%s' was never succesfully loaded!", db_label);

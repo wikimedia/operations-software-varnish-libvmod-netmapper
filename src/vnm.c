@@ -20,7 +20,7 @@
 #ifdef NO_VARNISH
 #define ERR(fmt,...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
 #else
-#include "bin/varnishd/cache.h"
+#include "cache/cache.h"
 #define ERR(fmt,...) VSL(SLT_Error, 0, "vmod_netmapper: " fmt, ##__VA_ARGS__)
 #endif
 

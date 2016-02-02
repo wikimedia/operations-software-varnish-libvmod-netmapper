@@ -1,6 +1,4 @@
-VARNISHSRC ?= $(top_srcdir)
-
-AM_CPPFLAGS = -I$(VARNISHSRC)/include -I$(VARNISHSRC) -I$(srcdir)/nlt
+AM_CPPFLAGS = @VMOD_INCLUDES@ -I$(srcdir)/nlt
 
 COMMON_SRC = \
 	vnm.c \
@@ -12,10 +10,12 @@ COMMON_SRC = \
 	nlt/ntree.c \
 	nlt/ntree.h
 
-vcc_if.c vcc_if.h: $(VARNISHSRC)/lib/libvmod_std/vmod.py $(srcdir)/vmod_netmapper.vcc
-	@PYTHON@ $(VARNISHSRC)/lib/libvmod_std/vmod.py $(srcdir)/vmod_netmapper.vcc
+vcc_if.c: vcc_if.h
 
-vmoddir = $(libdir)/varnish/vmods
+vcc_if.h: @VMODTOOL@ $(srcdir)/vmod_netmapper.vcc
+	@VMODTOOL@ $(srcdir)/vmod_netmapper.vcc
+
+vmoddir = @VMOD_DIR@
 vmod_LTLIBRARIES = libvmod_netmapper.la
 
 libvmod_netmapper_la_LDFLAGS = -module -export-dynamic -avoid-version -shared
@@ -41,4 +41,4 @@ check: $(VMOD_TESTS) validate-tests
 
 EXTRA_DIST = nlt/README vmod_netmapper.vcc $(VMOD_TESTS) $(VMOD_TDATA)
 
-CLEANFILES = $(builddir)/vcc_if.c $(builddir)/vcc_if.h
+CLEANFILES = $(builddir)/vcc_if.c $(builddir)/vcc_if.h $(builddir)/vmod_netmapper.rst $(builddir)/vmod_netmapper.man.rst

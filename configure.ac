@@ -1,7 +1,8 @@
 AC_PREREQ(2.59)
-AC_COPYRIGHT([Copyright (c) 2013 Brandon Black <bblack@wikimedia.org>])
-AC_INIT([libvmod-netmapper],[1.2],[bblack@wikimedia.org],[libvmod-netmapper],[https://git.wikimedia.org/summary/operations%2Fsoftware%2Fvarnish%2Flibvmod-netmapper])
+AC_COPYRIGHT([Copyright (c) 2013-2016 Brandon Black <bblack@wikimedia.org>])
+AC_INIT([libvmod-netmapper],[1.3],[bblack@wikimedia.org],[libvmod-netmapper],[https://git.wikimedia.org/summary/operations%2Fsoftware%2Fvarnish%2Flibvmod-netmapper])
 AC_CONFIG_MACRO_DIR([m4])
+m4_ifndef([VARNISH_VMOD_INCLUDES], AC_MSG_ERROR([Need varnish.m4]))
 AC_CONFIG_AUX_DIR([acaux])
 AC_CONFIG_SRCDIR(src/vmod_netmapper.vcc)
 AM_CONFIG_HEADER(config.h)
@@ -41,36 +42,35 @@ AC_CHECK_HEADERS([sys/stdlib.h])
 # Check for python
 AC_CHECK_PROGS(PYTHON, [python3 python3.1 python3.2 python2.7 python2.6 python2.5 python2 python], [AC_MSG_ERROR([Python is needed to build this vmod, please install python.])])
 
-# Varnish source tree
-AC_ARG_VAR([VARNISHSRC], [path to Varnish source tree (mandatory)])
-if test "x$VARNISHSRC" = x; then
-	AC_MSG_ERROR([No Varnish source tree specified])
-fi
-VARNISHSRC=`cd $VARNISHSRC && pwd`
-AC_CHECK_FILE([$VARNISHSRC/include/varnishapi.h],
-	[],
-	[AC_MSG_FAILURE(["$VARNISHSRC" is not a Varnish source directory])]
-)
+PKG_CHECK_MODULES([libvarnishapi], [varnishapi])
+PKG_CHECK_VAR([LIBVARNISHAPI_PREFIX], [varnishapi], [prefix])
+PKG_CHECK_VAR([LIBVARNISHAPI_DATAROOTDIR], [varnishapi], [datarootdir])
+PKG_CHECK_VAR([LIBVARNISHAPI_BINDIR], [varnishapi], [bindir])
+PKG_CHECK_VAR([LIBVARNISHAPI_SBINDIR], [varnishapi], [sbindir])
+AC_SUBST([LIBVARNISHAPI_DATAROOTDIR])
 
-# varnishd and varnishtest locations (default from source tree)
+# Varnish include files tree
+VARNISH_VMOD_INCLUDES
+VARNISH_VMOD_DIR
+VARNISH_VMODTOOL
+# AC_PREFIX_DEFAULT acts too early in the configure run,
+# so we can't use it
+ac_default_prefix=$LIBVARNISHAPI_PREFIX
 
-AC_ARG_VAR([VARNISHD], [path to varnishd binary (default: used built copy in VARNISHSRC)])
-if test "x$VARNISHD" = x; then
-    VARNISHD="$VARNISHSRC/bin/varnishd/varnishd"
-fi
-AC_CHECK_FILE([$VARNISHD],
-	[],
-    [AC_MSG_FAILURE([varnishd binary "$VARNISHD" does not exist])]
-)
+AC_PATH_PROG([VARNISHTEST], [varnishtest], [],
+    [$LIBVARNISHAPI_BINDIR:$LIBVARNISHAPI_SBINDIR:$PATH])
+AC_PATH_PROG([VARNISHD], [varnishd], [],
+    [$LIBVARNISHAPI_SBINDIR:$LIBVARNISHAPI_BINDIR:$PATH])
 
-AC_ARG_VAR([VARNISHTEST], [path to varnishtest binary (default: used built copy in VARNISHSRC)])
-if test "x$VARNISHTEST" = x; then
-    VARNISHTEST="$VARNISHSRC/bin/varnishtest/varnishtest"
-fi
-AC_CHECK_FILE([$VARNISHTEST],
-	[],
-    [AC_MSG_FAILURE([varnishtest binary "$VARNISHTEST" does not exist])]
-)
+AC_CHECK_FILE([${VAPI_INCLUDE_DIR}/vmod_abi.h],
+    [
+    AC_MSG_CHECKING([varnish ABI version])
+    AC_SUBST([VMOD_ABI_VERSION],
+         [`cut -d ' ' -f 4 "${VAPI_INCLUDE_DIR}/vmod_abi.h"`])
+    AC_MSG_RESULT([${VMOD_ABI_VERSION}])
+    ], [
+    AC_MSG_ERROR([Could not find vmod_abi.h. Need Varnish4 or higher])
+    ])
 
 XLIBS=$LIBS
 

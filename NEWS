@@ -1,3 +1,8 @@
+1.3 - 2016-02-02
+   Use vrt_ctx pointers instead of a sess pointers in VMOD functions.
+   Use VSLb instead of WSP for logging.
+   Autotools-related changes because of the way vmods are built in Varnish 4.
+
 1.2 - 2013-09-12
    Added vnm_validate cmdline tool.  Exit status indicates JSON parse-ability.
      Accepts IP addr as extra argument for manual results debugging.
