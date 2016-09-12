@@ -1,3 +1,6 @@
+1.4 - 2016-09-12
+   Bugfix for varnish4 sending NULL ip_string
+
 1.3 - 2016-02-02
    Use vrt_ctx pointers instead of a sess pointers in VMOD functions.
    Use VSLb instead of WSP for logging.

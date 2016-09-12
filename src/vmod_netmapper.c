@@ -172,8 +172,11 @@ static void destruct_rcu(void* x) { pthread_setspecific(unreg_hack, NULL); rcu_u
 static void make_unreg_hack(void) { pthread_key_create(&unreg_hack, destruct_rcu); }
 
 const char* vmod_map(const struct vrt_ctx *ctx, struct vmod_priv* priv, const char* db_label, const char* ip_string) {
-    assert(ctx); assert(priv); assert(priv->priv); assert(ip_string);
+    assert(ctx); assert(priv); assert(priv->priv);
 	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+
+    if (!ip_string)
+        return NULL;
 
     // The rest of the rcu register/unregister hack
     static __thread bool rcu_registered = false;
