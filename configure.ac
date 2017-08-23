@@ -66,7 +66,7 @@ AC_CHECK_FILE([${VAPI_INCLUDE_DIR}/vmod_abi.h],
     [
     AC_MSG_CHECKING([varnish ABI version])
     AC_SUBST([VMOD_ABI_VERSION],
-         [`cut -d ' ' -f 4 "${VAPI_INCLUDE_DIR}/vmod_abi.h"`])
+         [`cat "${VAPI_INCLUDE_DIR}/vmod_abi.h" | grep "#define" | cut -d ' ' -f 4`])
     AC_MSG_RESULT([${VMOD_ABI_VERSION}])
     ], [
     AC_MSG_ERROR([Could not find vmod_abi.h. Need Varnish4 or higher])
