@@ -1,3 +1,11 @@
+libvmod-netmapper (1.6-1) unstable; urgency=medium
+
+  * New upstream release fixing varnish child crash on vcl.discard (T188089)
+  * Old style config section [git-buildpackage] renamed to [buildpackage]
+  * Bump standards-version to 3.9.8
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Fri, 23 Feb 2018 18:00:45 +0100
+
 libvmod-netmapper (1.5-1) unstable; urgency=medium
 
   * Varnish 5 compatibility update
