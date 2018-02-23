@@ -78,6 +78,8 @@ static void* updater_start(void* dbf_asvoid) {
     vnm_db_file_t* dbf = dbf_asvoid;
     struct stat check_stat;
 
+    pthread_setname_np(pthread_self(), "netmap");
+
     while(1) {
         sleep(dbf->reload_check_interval);
         if(stat(dbf->fn, &check_stat)) {
@@ -123,7 +125,8 @@ static void per_vcl_fini(void* vp_asvoid) {
         pthread_join(vp->dbs[i]->updater, NULL);
 
         // free the most-recent data
-        vnm_db_destruct(vp->dbs[i]->db);
+        if(vp->dbs[i]->db)
+            vnm_db_destruct(vp->dbs[i]->db);
         free(vp->dbs[i]->fn);
         free(vp->dbs[i]->label);
         free(vp->dbs[i]);

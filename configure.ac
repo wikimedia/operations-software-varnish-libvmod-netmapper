@@ -1,6 +1,6 @@
 AC_PREREQ(2.59)
-AC_COPYRIGHT([Copyright (c) 2013-2017 Brandon Black <bblack@wikimedia.org>])
-AC_INIT([libvmod-netmapper],[1.5],[bblack@wikimedia.org],[libvmod-netmapper],[https://phabricator.wikimedia.org/diffusion/OSVL/])
+AC_COPYRIGHT([Copyright (c) 2013-2018 Brandon Black <bblack@wikimedia.org>])
+AC_INIT([libvmod-netmapper],[1.6],[bblack@wikimedia.org],[libvmod-netmapper],[https://phabricator.wikimedia.org/diffusion/OSVL/])
 AC_CONFIG_MACRO_DIR([m4])
 m4_ifndef([VARNISH_VMOD_INCLUDES], AC_MSG_ERROR([Need varnish.m4]))
 AC_CONFIG_AUX_DIR([acaux])

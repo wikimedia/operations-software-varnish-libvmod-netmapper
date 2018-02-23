@@ -1,3 +1,11 @@
+1.6 - 2018-02-23
+   Fix NULL pointer deref crash during vcl_fini cleanup if a configured
+     database file never existed from startup through fini.
+   Added pthread_setname_np to set updater thread title to "netmap", otherwise
+     it inherit's varnish's "cache-main", which is confusing.  This call isn't
+     portable and we're using the Linux/glibc variant here without all the
+     testing for other platforms' methods of setting it.
+
 1.5 - 2017-08-23
    Varnish 5 compatibility update
 
