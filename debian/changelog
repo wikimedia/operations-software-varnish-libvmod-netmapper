@@ -1,3 +1,10 @@
+libvmod-netmapper (1.7-1) jessie-wikimedia; urgency=medium
+
+  * New upstream release fixing compile-time warning
+  * Use distribution 'jessie-wikimedia' instead of 'unstable'
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Mon, 23 Apr 2018 14:22:43 +0200
+
 libvmod-netmapper (1.6-1) unstable; urgency=medium
 
   * New upstream release fixing varnish child crash on vcl.discard (T188089)
