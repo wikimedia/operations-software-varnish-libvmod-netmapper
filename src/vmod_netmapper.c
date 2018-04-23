@@ -17,6 +17,7 @@
  *
  */
 
+#define _GNU_SOURCE
 #include "vrt.h"
 
 #include "cache/cache.h"
