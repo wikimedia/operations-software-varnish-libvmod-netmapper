@@ -1,3 +1,10 @@
+libvmod-netmapper (1.7-2) stretch-wikimedia; urgency=medium
+
+  * Rebuild for stretch. T200445
+  * gbp.conf: remove overlay = True for CI.
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Thu, 26 Jul 2018 18:25:46 +0200
+
 libvmod-netmapper (1.7-1) jessie-wikimedia; urgency=medium
 
   * New upstream release fixing compile-time warning
