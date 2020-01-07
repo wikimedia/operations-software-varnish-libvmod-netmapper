@@ -1,3 +1,11 @@
+libvmod-netmapper (1.7-3) buster-wikimedia; urgency=medium
+
+  * Rebuild for buster. T242093
+  * Limit libvarnishapi-dev version to >=5.1.3 and < 5.2.
+  * Added myself to the uploaders list.
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Tue, 07 Jan 2020 14:02:47 +0000
+
 libvmod-netmapper (1.7-2) stretch-wikimedia; urgency=medium
 
   * Rebuild for stretch. T200445

@@ -2,8 +2,9 @@ Source: libvmod-netmapper
 Section: web
 Priority: extra
 Maintainer: Brandon Black <bblack@wikimedia.org>
-Uploaders: Emanuele Rocca <ema@wikimedia.org>
-Build-Depends: debhelper (>= 9), autotools-dev, dh-autoreconf, libvarnishapi-dev (>= 5.1.3), libjansson-dev, liburcu-dev, pkg-config, python-docutils
+Uploaders: Emanuele Rocca <ema@wikimedia.org>,
+           Valentin Gutierrez <vgutierrez@wikimedia.org>
+Build-Depends: debhelper (>= 9), autotools-dev, dh-autoreconf, libvarnishapi-dev (>= 5.1.3), libvarnishapi-dev (<< 5.2), libjansson-dev, liburcu-dev, pkg-config, python-docutils
 Standards-Version: 3.9.8
 Homepage: https://git.wikimedia.org/summary/operations/software/varnish/libvmod-netmapper
 #Vcs-Git: https://gerrit.wikimedia.org/r/operations/software/varnish/libvmod-netmapper
