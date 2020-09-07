@@ -18,8 +18,6 @@
  */
 
 #define _GNU_SOURCE
-#include "vrt.h"
-
 #include "cache/cache.h"
 #include "vcc_if.h"
 
@@ -87,7 +85,7 @@ static void* updater_start(void* dbf_asvoid) {
             VSL(SLT_Error, 0, "vmod_netmapper: Failed to stat JSON database '%s' for reload check", dbf->fn);
             continue;
         }
-       
+
         if(    check_stat.st_mtime != dbf->db_stat.st_mtime
             || check_stat.st_ctime != dbf->db_stat.st_ctime
             || check_stat.st_ino   != dbf->db_stat.st_ino
