@@ -1,3 +1,9 @@
+libvmod-netmapper (1.8-1) buster-wikimedia; urgency=medium
+
+  * New upstream release fixing compiling issues against Varnish 6
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Mon, 07 Sep 2020 15:06:17 +0000
+
 libvmod-netmapper (1.7-3) buster-wikimedia; urgency=medium
 
   * Rebuild for buster. T242093
