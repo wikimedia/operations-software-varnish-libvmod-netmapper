@@ -1,3 +1,4 @@
 $Module netmapper 3 Varnish module to map an IP address to a string 
+$ABI vrt
 $Function VOID init(PRIV_VCL, STRING, STRING, INT)
 $Function STRING map(PRIV_VCL, STRING, STRING)
