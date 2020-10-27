@@ -1,3 +1,9 @@
+libvmod-netmapper (1.9-1) buster-wikimedia; urgency=medium
+
+  * New upstream release adding 'ABI vrt' to vmod_netmapper.vcc. (Bug: T266567)
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Tue, 27 Oct 2020 15:40:18 +0100
+
 libvmod-netmapper (1.8-1) buster-wikimedia; urgency=medium
 
   * New upstream release fixing compiling issues against Varnish 6
